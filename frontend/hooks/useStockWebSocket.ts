@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface Trade {
   symbol: string;
@@ -12,6 +12,12 @@ export interface Trade {
 export function useStockWebSocket(symbols: string[]) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
+  // ref로 최신 symbols를 참조 — WebSocket을 재연결하지 않고도 필터링 기준을 동적으로 갱신
+  const symbolsRef = useRef(symbols);
+  useEffect(() => {
+    symbolsRef.current = symbols;
+  }, [symbols]);
+
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:8080/ws/stock");
 
@@ -22,7 +28,7 @@ export function useStockWebSocket(symbols: string[]) {
     ws.onmessage = (event) => {
       try {
         const trade: Trade = JSON.parse(event.data);
-        if (!symbols.includes(trade.symbol)) return;
+        if (!symbolsRef.current.includes(trade.symbol)) return;
         setPrices((prev) => ({ ...prev, [trade.symbol]: trade }));
       } catch {
         // 파싱 실패 시 무시
@@ -30,7 +36,7 @@ export function useStockWebSocket(symbols: string[]) {
     };
 
     return () => ws.close();
-  }, []);
+  }, []); // WebSocket은 마운트 시 한 번만 연결
 
   return prices;
 }
