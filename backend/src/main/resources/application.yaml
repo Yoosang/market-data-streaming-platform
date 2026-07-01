@@ -12,17 +12,30 @@ spring:
   # Ver2 시작 시 아래 exclude 목록을 제거하고
   # 하단 주석 처리된 datasource / redis / kafka 설정을 복원하세요.
   # ──────────────────────────────────────────
+  # ── Ver2: Redis/Kafka는 아직 사용 안 함 ──
   autoconfigure:
     exclude:
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceInitializationAutoConfiguration
-      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
-      - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
       - org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 
-  # ── Ver2에서 활성화 (위 exclude 제거 후 주석 해제) ──
+  datasource:
+    url: jdbc:mysql://localhost:3306/dev_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: user
+    password: password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # update: 엔티티 변경 시 테이블 자동 반영 (개발 환경 전용 — 운영에선 사용 금지)
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    show-sql: true
+
+  # ── Ver4에서 활성화 ──
   # kafka:
   #   bootstrap-servers: localhost:9092
   #   producer:
@@ -34,22 +47,8 @@ spring:
   #     key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   #     value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
+  # ── Ver3에서 활성화 ──
   # data:
   #   redis:
   #     host: localhost
   #     port: 6379
-
-  # datasource:
-  #   url: jdbc:mysql://localhost:3306/dev_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-  #   username: user
-  #   password: password
-  #   driver-class-name: com.mysql.cj.jdbc.Driver
-
-  # jpa:
-  #   hibernate:
-  #     ddl-auto: update
-  #   properties:
-  #     hibernate:
-  #       dialect: org.hibernate.dialect.MySQLDialect
-  #       format_sql: true
-  #   show-sql: true
