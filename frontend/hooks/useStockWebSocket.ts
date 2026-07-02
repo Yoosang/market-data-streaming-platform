@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Trade {
   symbol: string;
@@ -7,23 +7,44 @@ export interface Trade {
   timestamp: number;
 }
 
-// 종목별 최신 체결가를 Map으로 관리
-// 백엔드 ws://localhost:8080/ws/stock 에 연결해 실시간 Trade를 수신한다
 export function useStockWebSocket(symbols: string[]) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
-  // ref로 최신 symbols를 참조 — WebSocket을 재연결하지 않고도 필터링 기준을 동적으로 갱신
   const symbolsRef = useRef(symbols);
   useEffect(() => {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080/ws/stock");
+  // 재연결 관련 ref — 렌더링과 무관하게 유지
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectDelay = useRef(1000);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // 언마운트 시 의도적으로 닫는 경우 재연결 시도를 막기 위한 플래그
+  const isUnmounting = useRef(false);
 
-    ws.onopen = () => console.log("WebSocket connected");
-    ws.onclose = () => console.log("WebSocket disconnected");
-    ws.onerror = (e) => console.error(`WebSocket error ${e}`);
+  const connect = useCallback(() => {
+    const ws = new WebSocket("ws://localhost:8080/ws/stock");
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      reconnectDelay.current = 1000; // 연결 성공 시 딜레이 초기화
+    };
+
+    ws.onclose = () => {
+      if (isUnmounting.current) return; // 언마운트로 인한 종료면 재연결 안 함
+
+      const delay = reconnectDelay.current;
+      console.log(`WebSocket disconnected. Reconnecting in ${delay}ms...`);
+
+      reconnectTimer.current = setTimeout(() => {
+        // 다음 재연결 시도의 딜레이를 2배로 증가 (최대 30초)
+        reconnectDelay.current = Math.min(delay * 2, 30000);
+        connect();
+      }, delay);
+    };
+
+    ws.onerror = (e) => console.error("WebSocket error", e);
 
     ws.onmessage = (event) => {
       try {
@@ -34,9 +55,18 @@ export function useStockWebSocket(symbols: string[]) {
         // 파싱 실패 시 무시
       }
     };
+  }, []); // connect는 ref만 참조하므로 한 번만 생성
 
-    return () => ws.close();
-  }, []); // WebSocket은 마운트 시 한 번만 연결
+  useEffect(() => {
+    isUnmounting.current = false;
+    connect();
+
+    return () => {
+      isUnmounting.current = true;
+      clearTimeout(reconnectTimer.current); // 예약된 재연결 타이머 취소
+      wsRef.current?.close();
+    };
+  }, [connect]);
 
   return prices;
 }
