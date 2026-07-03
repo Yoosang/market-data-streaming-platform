@@ -2,6 +2,7 @@ package com.usang.marketdata.application.subscription;
 
 import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import com.usang.marketdata.infra.finnhub.FinnhubWebsocketClient;
+import com.usang.marketdata.infra.kis.KisWebsocketClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,13 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SubscriptionManager {
 
     private final FinnhubWebsocketClient finnhubWebsocketClient;
+    private final KisWebsocketClient kisWebsocketClient;
     private final WatchlistRepository watchlistRepository;
 
-    // 현재 Finnhub에 구독 요청을 보낸 종목 집합 (thread-safe)
+    // 현재 구독 중인 종목 집합 (US/KR 구분 없이 심볼 문자열로 관리 — 두 시장 간 심볼 충돌 없음)
     private final Set<String> subscribedSymbols = ConcurrentHashMap.newKeySet();
 
-    // 앱 시작 시 DB에 이미 저장된 관심종목을 추적 집합에 미리 반영
-    // 실제 Finnhub 구독은 FinnhubWebsocketClient.afterConnectionEstablished()에서 처리
     @PostConstruct
     public void init() {
         watchlistRepository.findAll().stream()
@@ -32,22 +32,31 @@ public class SubscriptionManager {
         log.info("SubscriptionManager initialized with symbols: {}", subscribedSymbols);
     }
 
-    public void subscribe(String symbol) {
-        // 이미 구독 중이면 Finnhub에 중복 요청하지 않음
+    public void subscribe(String symbol, String market) {
         if (subscribedSymbols.add(symbol)) {
-            finnhubWebsocketClient.subscribe(symbol);
-            log.info("Subscribed to new symbol: {}", symbol);
+            route(symbol, market, true);
+            log.info("Subscribed {} [{}]", symbol, market);
         }
     }
 
-    public void unsubscribe(String symbol) {
-        // 다른 사용자가 아직 이 종목을 관심종목으로 갖고 있으면 구독 유지
+    public void unsubscribe(String symbol, String market) {
         if (watchlistRepository.existsBySymbol(symbol)) {
-            return;
+            return; // 다른 사용자가 아직 구독 중
         }
         if (subscribedSymbols.remove(symbol)) {
-            finnhubWebsocketClient.unsubscribe(symbol);
-            log.info("Unsubscribed from symbol: {}", symbol);
+            route(symbol, market, false);
+            log.info("Unsubscribed {} [{}]", symbol, market);
+        }
+    }
+
+    // market에 따라 Finnhub(US) 또는 KIS(KR) 클라이언트로 라우팅
+    private void route(String symbol, String market, boolean subscribe) {
+        if ("KR".equals(market)) {
+            if (subscribe) kisWebsocketClient.subscribe(symbol);
+            else kisWebsocketClient.unsubscribe(symbol);
+        } else {
+            if (subscribe) finnhubWebsocketClient.subscribe(symbol);
+            else finnhubWebsocketClient.unsubscribe(symbol);
         }
     }
 }

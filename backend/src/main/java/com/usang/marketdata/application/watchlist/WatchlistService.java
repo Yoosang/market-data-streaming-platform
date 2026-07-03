@@ -17,26 +17,27 @@ public class WatchlistService {
     private final SubscriptionManager subscriptionManager;
 
     @Transactional(readOnly = true)
-    public List<String> getSymbols(String userId) {
-        return watchlistRepository.findByUserId(userId).stream()
-                .map(Watchlist::getSymbol)
-                .toList();
+    public List<Watchlist> getWatchlist(String userId) {
+        return watchlistRepository.findByUserId(userId);
     }
 
     @Transactional
-    public void addSymbol(String userId, String symbol) {
-        // 이미 등록된 종목이면 조용히 무시 (멱등성 보장)
+    public void addSymbol(String userId, String symbol, String market) {
         if (watchlistRepository.findByUserIdAndSymbol(userId, symbol).isPresent()) {
             return;
         }
-        watchlistRepository.save(Watchlist.of(userId, symbol));
-        subscriptionManager.subscribe(symbol);
+        watchlistRepository.save(Watchlist.of(userId, symbol, market));
+        subscriptionManager.subscribe(symbol, market);
     }
 
     @Transactional
     public void removeSymbol(String userId, String symbol) {
+        // 삭제 전에 market 정보를 먼저 조회해야 unsubscribe 라우팅이 가능
+        Watchlist entry = watchlistRepository.findByUserIdAndSymbol(userId, symbol)
+                .orElse(null);
+        if (entry == null) return;
+
         watchlistRepository.deleteByUserIdAndSymbol(userId, symbol);
-        // DB 삭제 후 다른 사용자가 구독 중인지 확인해서 필요시 Finnhub 구독 해제
-        subscriptionManager.unsubscribe(symbol);
+        subscriptionManager.unsubscribe(symbol, entry.getMarket());
     }
 }

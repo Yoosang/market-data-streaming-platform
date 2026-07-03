@@ -27,13 +27,18 @@ public class Watchlist {
     @Column(nullable = false, length = 20)
     private String symbol;
 
+    // "US" 또는 "KR" — 기존 데이터 보존을 위해 DB 레벨 DEFAULT 'US' 설정
+    @Column(nullable = false, length = 5, columnDefinition = "VARCHAR(5) NOT NULL DEFAULT 'US'")
+    private String market;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    public static Watchlist of(String userId, String symbol) {
+    public static Watchlist of(String userId, String symbol, String market) {
         Watchlist w = new Watchlist();
         w.userId = userId;
         w.symbol = symbol;
+        w.market = market;
         w.createdAt = LocalDateTime.now();
         return w;
     }
