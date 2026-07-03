@@ -1,15 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { useStockWebSocket } from "@/hooks/useStockWebSocket";
+import { useStockWebSocket, AlertMessage } from "@/hooks/useStockWebSocket";
 import CandleChart from "@/components/CandleChart";
+import AlertForm from "@/components/AlertForm";
 
 export default function Home() {
   const { symbols, addSymbol, removeSymbol } = useWatchlist();
-  const prices = useStockWebSocket(symbols);
   const [input, setInput] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+
+  // 브라우저 Notification 권한을 최초 1회 요청
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // 알림 트리거 시 브라우저 알림 표시
+  const handleAlert = useCallback((alert: AlertMessage) => {
+    const direction = alert.direction === "ABOVE" ? "이상" : "이하";
+    const body = `${alert.symbol} 현재가 $${alert.price.toFixed(2)} — 목표가 $${alert.targetPrice.toFixed(2)} ${direction} 도달`;
+
+    if (Notification.permission === "granted") {
+      new Notification(`${alert.symbol} 가격 알림`, { body });
+    } else {
+      // 권한이 없으면 콘솔로라도 확인
+      console.log("[ALERT]", body);
+    }
+  }, []);
+
+  const prices = useStockWebSocket(symbols, handleAlert);
 
   const handleAdd = () => {
     if (!input.trim()) return;
@@ -18,7 +40,6 @@ export default function Home() {
   };
 
   const handleRowClick = (symbol: string) => {
-    // 같은 종목 클릭 시 차트 닫기 (토글)
     setSelectedSymbol((prev) => (prev === symbol ? null : symbol));
   };
 
@@ -76,7 +97,7 @@ export default function Home() {
                   )}
                   <button
                     onClick={(e) => {
-                      e.stopPropagation(); // 행 클릭 이벤트와 분리
+                      e.stopPropagation();
                       if (selectedSymbol === symbol) setSelectedSymbol(null);
                       removeSymbol(symbol);
                     }}
@@ -88,8 +109,12 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 해당 종목 선택 시 차트 표시 */}
-              {isSelected && <CandleChart symbol={symbol} />}
+              {isSelected && (
+                <>
+                  <CandleChart symbol={symbol} />
+                  <AlertForm symbol={symbol} />
+                </>
+              )}
             </div>
           );
         })}

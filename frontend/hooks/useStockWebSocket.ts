@@ -7,7 +7,18 @@ export interface Trade {
   timestamp: number;
 }
 
-export function useStockWebSocket(symbols: string[]) {
+export interface AlertMessage {
+  type: "ALERT";
+  symbol: string;
+  price: number;
+  targetPrice: number;
+  direction: "ABOVE" | "BELOW";
+}
+
+export function useStockWebSocket(
+  symbols: string[],
+  onAlert?: (alert: AlertMessage) => void
+) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
   const symbolsRef = useRef(symbols);
@@ -15,11 +26,15 @@ export function useStockWebSocket(symbols: string[]) {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // 재연결 관련 ref — 렌더링과 무관하게 유지
+  // onAlert도 ref로 관리 — 콜백이 바뀌어도 WebSocket을 재연결하지 않음
+  const onAlertRef = useRef(onAlert);
+  useEffect(() => {
+    onAlertRef.current = onAlert;
+  }, [onAlert]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectDelay = useRef(1000);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // 언마운트 시 의도적으로 닫는 경우 재연결 시도를 막기 위한 플래그
   const isUnmounting = useRef(false);
 
   const connect = useCallback(() => {
@@ -28,17 +43,16 @@ export function useStockWebSocket(symbols: string[]) {
 
     ws.onopen = () => {
       console.log("WebSocket connected");
-      reconnectDelay.current = 1000; // 연결 성공 시 딜레이 초기화
+      reconnectDelay.current = 1000;
     };
 
     ws.onclose = () => {
-      if (isUnmounting.current) return; // 언마운트로 인한 종료면 재연결 안 함
+      if (isUnmounting.current) return;
 
       const delay = reconnectDelay.current;
       console.log(`WebSocket disconnected. Reconnecting in ${delay}ms...`);
 
       reconnectTimer.current = setTimeout(() => {
-        // 다음 재연결 시도의 딜레이를 2배로 증가 (최대 30초)
         reconnectDelay.current = Math.min(delay * 2, 30000);
         connect();
       }, delay);
@@ -48,14 +62,22 @@ export function useStockWebSocket(symbols: string[]) {
 
     ws.onmessage = (event) => {
       try {
-        const trade: Trade = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
+
+        // type 필드가 있으면 알림 메시지 — trade 메시지와 분기
+        if (msg.type === "ALERT") {
+          onAlertRef.current?.(msg as AlertMessage);
+          return;
+        }
+
+        const trade = msg as Trade;
         if (!symbolsRef.current.includes(trade.symbol)) return;
         setPrices((prev) => ({ ...prev, [trade.symbol]: trade }));
       } catch {
         // 파싱 실패 시 무시
       }
     };
-  }, []); // connect는 ref만 참조하므로 한 번만 생성
+  }, []);
 
   useEffect(() => {
     isUnmounting.current = false;
@@ -63,7 +85,7 @@ export function useStockWebSocket(symbols: string[]) {
 
     return () => {
       isUnmounting.current = true;
-      clearTimeout(reconnectTimer.current); // 예약된 재연결 타이머 취소
+      clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);
