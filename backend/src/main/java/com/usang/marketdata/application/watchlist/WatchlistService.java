@@ -1,6 +1,6 @@
 package com.usang.marketdata.application.watchlist;
 
-import com.usang.marketdata.application.stock.SubscriptionManager;
+import com.usang.marketdata.application.subscription.SubscriptionManager;
 import com.usang.marketdata.domain.watchlist.Watchlist;
 import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import lombok.RequiredArgsConstructor;

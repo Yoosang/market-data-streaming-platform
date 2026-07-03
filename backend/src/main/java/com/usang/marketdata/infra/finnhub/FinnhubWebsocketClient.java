@@ -1,7 +1,7 @@
 package com.usang.marketdata.infra.finnhub;
 
 import tools.jackson.databind.ObjectMapper;
-import com.usang.marketdata.application.stock.StockBroadcastService;
+import com.usang.marketdata.application.broadcast.StockBroadcastService;
 import com.usang.marketdata.domain.stock.Trade;
 import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import com.usang.marketdata.infra.finnhub.dto.FinnhubMessage;

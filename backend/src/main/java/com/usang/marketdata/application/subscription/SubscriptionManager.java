@@ -1,4 +1,4 @@
-package com.usang.marketdata.application.stock;
+package com.usang.marketdata.application.subscription;
 
 import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import com.usang.marketdata.infra.finnhub.FinnhubWebsocketClient;
