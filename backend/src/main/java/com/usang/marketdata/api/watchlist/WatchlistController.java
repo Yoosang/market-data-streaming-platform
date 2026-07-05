@@ -1,6 +1,7 @@
 package com.usang.marketdata.api.watchlist;
 
 import com.usang.marketdata.application.watchlist.WatchlistService;
+import com.usang.marketdata.domain.watchlist.Watchlist;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -15,14 +16,16 @@ public class WatchlistController {
     private final WatchlistService watchlistService;
 
     @GetMapping
-    public List<String> getSymbols(@PathVariable String userId) {
-        return watchlistService.getSymbols(userId);
+    public List<WatchlistItem> getSymbols(@PathVariable String userId) {
+        return watchlistService.getWatchlist(userId).stream()
+                .map(w -> new WatchlistItem(w.getSymbol(), w.getMarket(), w.getName()))
+                .toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public void addSymbol(@PathVariable String userId, @RequestBody AddSymbolRequest request) {
-        watchlistService.addSymbol(userId, request.symbol());
+        watchlistService.addSymbol(userId, request.symbol(), request.market(), request.name());
     }
 
     @DeleteMapping("/{symbol}")
@@ -31,5 +34,7 @@ public class WatchlistController {
         watchlistService.removeSymbol(userId, symbol);
     }
 
-    record AddSymbolRequest(String symbol) {}
+    record AddSymbolRequest(String symbol, String market, String name) {}
+
+    record WatchlistItem(String symbol, String market, String name) {}
 }

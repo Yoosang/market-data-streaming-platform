@@ -27,13 +27,23 @@ public class Watchlist {
     @Column(nullable = false, length = 20)
     private String symbol;
 
+    // "US" 또는 "KR" — 기존 데이터 보존을 위해 DB 레벨 DEFAULT 'US' 설정
+    @Column(nullable = false, length = 5, columnDefinition = "VARCHAR(5) NOT NULL DEFAULT 'US'")
+    private String market;
+
+    // KR 종목명 (예: 삼성전자). US 종목은 null — 표시할 공식 한국어 이름이 없음
+    @Column(length = 50)
+    private String name;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    public static Watchlist of(String userId, String symbol) {
+    public static Watchlist of(String userId, String symbol, String market, String name) {
         Watchlist w = new Watchlist();
         w.userId = userId;
         w.symbol = symbol;
+        w.market = market;
+        w.name = name;
         w.createdAt = LocalDateTime.now();
         return w;
     }

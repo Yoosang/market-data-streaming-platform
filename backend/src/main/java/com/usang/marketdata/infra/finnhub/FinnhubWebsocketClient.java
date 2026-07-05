@@ -1,7 +1,7 @@
 package com.usang.marketdata.infra.finnhub;
 
 import tools.jackson.databind.ObjectMapper;
-import com.usang.marketdata.application.stock.StockBroadcastService;
+import com.usang.marketdata.application.broadcast.StockBroadcastService;
 import com.usang.marketdata.domain.stock.Trade;
 import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import com.usang.marketdata.infra.finnhub.dto.FinnhubMessage;
@@ -30,8 +30,8 @@ public class FinnhubWebsocketClient extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.finnhubSession = session;
 
-        // DB에 저장된 관심종목 전체를 구독 (앱 재시작 시에도 기존 구독 복원)
-        List<String> symbols = watchlistRepository.findAll().stream()
+        // DB에 저장된 US 종목만 구독 — KR 종목은 KisWebsocketClient가 담당
+        List<String> symbols = watchlistRepository.findByMarket("US").stream()
                 .map(w -> w.getSymbol())
                 .distinct()
                 .toList();

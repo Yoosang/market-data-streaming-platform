@@ -22,40 +22,70 @@ public class CandleAggregator {
 
     private final CandleRepository candleRepository;
 
-    // symbol → 현재 집계 중인 1분봉 상태
-    private final Map<String, InProgressCandle> currentCandles = new ConcurrentHashMap<>();
+    // 타임프레임별 집계 상태 — 틱이 들어올 때마다 세 Map이 동시에 업데이트됨
+    private final Map<String, InProgressCandle> oneMinCandles  = new ConcurrentHashMap<>();
+    private final Map<String, InProgressCandle> fiveMinCandles = new ConcurrentHashMap<>();
+    private final Map<String, InProgressCandle> dailyCandles   = new ConcurrentHashMap<>();
 
     public void onTrade(Trade trade) {
-        // compute()는 ConcurrentHashMap의 원자적 연산 — 동시에 여러 틱이 들어와도 안전
-        currentCandles.compute(trade.symbol(), (symbol, candle) -> {
-            if (candle == null) {
-                return InProgressCandle.start(trade.price(), trade.volume());
-            }
+        update(oneMinCandles,  trade);
+        update(fiveMinCandles, trade);
+        update(dailyCandles,   trade);
+    }
+
+    // compute()는 ConcurrentHashMap의 원자적 연산 — 동시에 여러 틱이 들어와도 안전
+    private void update(Map<String, InProgressCandle> map, Trade trade) {
+        map.compute(trade.symbol(), (symbol, candle) -> {
+            if (candle == null) return InProgressCandle.start(trade.price(), trade.volume());
             candle.update(trade.price(), trade.volume());
             return candle;
         });
     }
 
-    // 매 분 0초에 실행 — 직전 1분 동안 쌓인 캔들을 DB에 저장하고 메모리를 비움
+    // ── 1분봉: 매 분 0초 ──────────────────────────────────────────
     @Scheduled(cron = "0 * * * * *")
-    public void flush() {
-        if (currentCandles.isEmpty()) {
-            return;
-        }
+    public void flushOneMin() {
+        // 스케줄러가 10:05:00에 실행 → 저장할 캔들의 openTime은 10:04:00
+        LocalDateTime openTime = LocalDateTime.now()
+                .minusMinutes(1)
+                .truncatedTo(ChronoUnit.MINUTES);
+        flush(oneMinCandles, "1m", openTime);
+    }
 
-        // 스케줄러가 10:05:00에 실행되면 → 저장할 캔들의 openTime은 10:04:00
-        LocalDateTime openTime = LocalDateTime.now().minusMinutes(1).truncatedTo(ChronoUnit.MINUTES);
+    // ── 5분봉: 매 5분 0초 (0, 5, 10, ... 분) ────────────────────
+    @Scheduled(cron = "0 */5 * * * *")
+    public void flushFiveMin() {
+        // 크론이 5분 경계에 정확히 실행되므로, 5분 빼고 분 단위 절삭만으로 openTime 계산
+        // 예: 10:05:00 실행 → openTime = 10:00:00
+        LocalDateTime openTime = LocalDateTime.now()
+                .minusMinutes(5)
+                .truncatedTo(ChronoUnit.MINUTES);
+        flush(fiveMinCandles, "5m", openTime);
+    }
+
+    // ── 일봉: 매일 자정 (UTC 기준) ────────────────────────────────
+    @Scheduled(cron = "0 0 0 * * *")
+    public void flushDaily() {
+        // 자정에 실행 → 저장할 캔들의 openTime은 전날 자정
+        LocalDateTime openTime = LocalDateTime.now()
+                .minusDays(1)
+                .truncatedTo(ChronoUnit.DAYS);
+        flush(dailyCandles, "1d", openTime);
+    }
+
+    private void flush(Map<String, InProgressCandle> map, String intervalType, LocalDateTime openTime) {
+        if (map.isEmpty()) return;
 
         List<Candle> toSave = new ArrayList<>();
-        currentCandles.forEach((symbol, inProgress) ->
-                toSave.add(Candle.of(symbol, "1m",
+        map.forEach((symbol, inProgress) ->
+                toSave.add(Candle.of(symbol, intervalType,
                         inProgress.open, inProgress.high, inProgress.low, inProgress.close,
                         inProgress.volume, openTime))
         );
-        currentCandles.clear();
+        map.clear();
 
         candleRepository.saveAll(toSave);
-        log.info("Candle flush: {} symbols saved for minute {}", toSave.size(), openTime);
+        log.info("Candle flush [{}]: {} symbols saved for {}", intervalType, toSave.size(), openTime);
     }
 
     // 집계 중인 캔들의 임시 상태 — CandleAggregator 내부에서만 사용
@@ -72,7 +102,7 @@ public class CandleAggregator {
         void update(double price, double vol) {
             if (price > high) high = price;
             if (price < low) low = price;
-            close = price;  // 마지막 틱이 종가
+            close = price;
             volume += vol;
         }
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -9,6 +9,8 @@ import {
   CandlestickSeriesOptions,
   Time,
 } from "lightweight-charts";
+
+type Interval = "1m" | "5m" | "1d";
 
 interface CandleData {
   time: Time;
@@ -24,11 +26,18 @@ interface Props {
 
 const API_BASE = "http://localhost:8080";
 
+const INTERVAL_LABELS: Record<Interval, string> = {
+  "1m": "1분",
+  "5m": "5분",
+  "1d": "일봉",
+};
+
 export default function CandleChart({ symbol }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // chart와 series를 ref로 보관 — 심볼 변경 시 차트를 새로 만들지 않고 데이터만 교체
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+
+  const [interval, setInterval] = useState<Interval>("1m");
 
   // 차트는 마운트 시 한 번만 생성
   useEffect(() => {
@@ -64,22 +73,41 @@ export default function CandleChart({ symbol }: Props) {
     return () => chart.remove();
   }, []);
 
-  // 심볼이 바뀔 때마다 데이터만 새로 불러와서 교체
+  // 심볼이나 interval이 바뀔 때마다 데이터만 새로 불러와서 교체
   useEffect(() => {
     if (!seriesRef.current || !symbol) return;
 
-    fetch(`${API_BASE}/api/candles/${symbol}?interval=1m&limit=60`)
+    fetch(`${API_BASE}/api/candles/${symbol}?interval=${interval}&limit=60`)
       .then((res) => res.json())
       .then((data: CandleData[]) => {
         seriesRef.current?.setData(data);
         chartRef.current?.timeScale().fitContent();
       })
       .catch(console.error);
-  }, [symbol]);
+  }, [symbol, interval]);
 
   return (
     <div className="w-full max-w-sm mt-4">
-      <p className="text-xs text-gray-500 mb-2 px-1">{symbol} · 1분봉</p>
+      <div className="flex items-center justify-between px-1 mb-2">
+        <p className="text-xs text-gray-500">
+          {symbol} · {INTERVAL_LABELS[interval]}
+        </p>
+        <div className="flex gap-1">
+          {(["1m", "5m", "1d"] as Interval[]).map((iv) => (
+            <button
+              key={iv}
+              onClick={() => setInterval(iv)}
+              className={`text-xs px-2 py-0.5 rounded ${
+                interval === iv
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {INTERVAL_LABELS[iv]}
+            </button>
+          ))}
+        </div>
+      </div>
       <div ref={containerRef} className="w-full h-64 rounded-xl overflow-hidden" />
     </div>
   );

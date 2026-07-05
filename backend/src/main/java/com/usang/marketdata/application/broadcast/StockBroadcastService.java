@@ -1,7 +1,8 @@
-package com.usang.marketdata.application.stock;
+package com.usang.marketdata.application.broadcast;
 
 import tools.jackson.databind.ObjectMapper;
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
+import com.usang.marketdata.application.alert.LatestPriceStore;
 import com.usang.marketdata.application.candle.CandleAggregator;
 import com.usang.marketdata.domain.stock.Trade;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +17,11 @@ public class StockBroadcastService {
     private final StockWebSocketHandler stockWebSocketHandler;
     private final ObjectMapper objectMapper;
     private final CandleAggregator candleAggregator;
+    private final LatestPriceStore latestPriceStore;
 
     public void broadcast(Trade trade) {
-        // 틱 데이터를 캔들 집계기에 전달 (프론트 전송과 동시에 처리)
         candleAggregator.onTrade(trade);
+        latestPriceStore.update(trade.symbol(), trade.price()); // 알림 체커가 참조하는 최신가 갱신
 
         try {
             String json = objectMapper.writeValueAsString(trade);

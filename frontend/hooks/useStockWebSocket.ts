@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Trade {
   symbol: string;
@@ -7,36 +7,88 @@ export interface Trade {
   timestamp: number;
 }
 
-// 종목별 최신 체결가를 Map으로 관리
-// 백엔드 ws://localhost:8080/ws/stock 에 연결해 실시간 Trade를 수신한다
-export function useStockWebSocket(symbols: string[]) {
+export interface AlertMessage {
+  type: "ALERT";
+  symbol: string;
+  price: number;
+  targetPrice: number;
+  direction: "ABOVE" | "BELOW";
+}
+
+export function useStockWebSocket(
+  symbols: string[],
+  onAlert?: (alert: AlertMessage) => void
+) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
-  // ref로 최신 symbols를 참조 — WebSocket을 재연결하지 않고도 필터링 기준을 동적으로 갱신
   const symbolsRef = useRef(symbols);
   useEffect(() => {
     symbolsRef.current = symbols;
   }, [symbols]);
 
+  // onAlert도 ref로 관리 — 콜백이 바뀌어도 WebSocket을 재연결하지 않음
+  const onAlertRef = useRef(onAlert);
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080/ws/stock");
+    onAlertRef.current = onAlert;
+  }, [onAlert]);
 
-    ws.onopen = () => console.log("WebSocket connected");
-    ws.onclose = () => console.log("WebSocket disconnected");
-    ws.onerror = (e) => console.error(`WebSocket error ${e}`);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectDelay = useRef(1000);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const isUnmounting = useRef(false);
+
+  const connect = useCallback(() => {
+    const ws = new WebSocket("ws://localhost:8080/ws/stock");
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      reconnectDelay.current = 1000;
+    };
+
+    ws.onclose = () => {
+      if (isUnmounting.current) return;
+
+      const delay = reconnectDelay.current;
+      console.log(`WebSocket disconnected. Reconnecting in ${delay}ms...`);
+
+      reconnectTimer.current = setTimeout(() => {
+        reconnectDelay.current = Math.min(delay * 2, 30000);
+        connect();
+      }, delay);
+    };
+
+    ws.onerror = (e) => console.error("WebSocket error", e);
 
     ws.onmessage = (event) => {
       try {
-        const trade: Trade = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
+
+        // type 필드가 있으면 알림 메시지 — trade 메시지와 분기
+        if (msg.type === "ALERT") {
+          onAlertRef.current?.(msg as AlertMessage);
+          return;
+        }
+
+        const trade = msg as Trade;
         if (!symbolsRef.current.includes(trade.symbol)) return;
         setPrices((prev) => ({ ...prev, [trade.symbol]: trade }));
       } catch {
         // 파싱 실패 시 무시
       }
     };
+  }, []);
 
-    return () => ws.close();
-  }, []); // WebSocket은 마운트 시 한 번만 연결
+  useEffect(() => {
+    isUnmounting.current = false;
+    connect();
+
+    return () => {
+      isUnmounting.current = true;
+      clearTimeout(reconnectTimer.current);
+      wsRef.current?.close();
+    };
+  }, [connect]);
 
   return prices;
 }

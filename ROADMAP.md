@@ -8,28 +8,46 @@
 
 ---
 
-## Ver2 — 관심종목 & 차트
+## Ver2 — 관심종목 & 차트 ✅
 - MySQL 도입, 사용자(임시 ID 기반, 로그인 없음)별 관심종목 저장
 - 관심종목만 구독하도록 동적 구독 관리
-- 틱 데이터를 1분 단위로 집계해 1분봉 캔들 생성 및 DB 저장 (일봉은 추후)
+- 틱 데이터를 1분 단위로 집계해 1분봉 캔들 생성 및 DB 저장
 - TradingView Lightweight Charts 연동
 
 ---
 
-## Ver3 — 알림 & 다중 데이터소스
-- 가격 도달 알림 (브라우저 알림 / 서버 로그)
-- 한국투자증권 API 추가 연동 (계좌/키 발급 선행 필요)
+## Ver3 — 품질 & 알림
+- 프론트엔드 WebSocket 자동 재연결 (백오프 로직)
+- 가격 알림: 목표가 설정 → 백엔드 감지 → 브라우저 Notification API
+- 봉 타임프레임 확장: 5분봉 + 일봉 추가, 차트에서 전환 버튼 제공
+- **이 단계에서 하지 않는 것**: 로그인/보안, Kafka, 한국투자증권 API
+
+> 한국투자증권 API는 계좌/키 발급 후 별도로 추가 예정 (Ver3 이후 어느 시점에도 가능)
 
 ---
 
 ## Ver4 — 인증 & 확장성
-- Spring Security 기반 자체 로그인 (JWT)
-- Kafka 도입 — 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
+- Spring Security 기반 자체 로그인 (JWT). 소셜로그인/OAuth2까지 확장하지 않음
+- Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소
+- Kafka 도입: 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
 
 ---
 
 ## 메모 (미래 버전에서 검토)
 <!-- 구현 중 떠오른 아이디어를 여기에 기록 -->
+
+### KR 종목 목록 자동 업데이트
+- 현재: KRX 사이트에서 수동으로 CSV 다운로드 → JSON 변환 스크립트 실행
+- 개선 시: KRX OTP 인증 플로우를 스크립트로 자동화하거나 FinanceDataReader 등 대안 라이브러리 활용
+- 목표: GitHub Actions로 매 거래일 새벽에 kr-stocks.json 자동 갱신 (신규 상장/상장폐지 반영)
+- 미룬 이유: KRX API가 세션 기반 인증을 요구해 단순 HTTP 요청으로는 우회 불가. 해결책 탐색 필요.
+
+
+### STOMP 프로토콜 도입
+- 현재: Raw WebSocket으로 단방향 브로드캐스트. 서버가 모든 종목 시세를 모든 클라이언트에 전송, 프론트에서 client-side 필터링.
+- 개선 시: STOMP의 topic 기반 구독(`/topic/price/AAPL`)으로 클라이언트별 관심종목만 서버에서 선별 전송. 사용자가 많아질수록 불필요한 트래픽 감소.
+- Spring: `@EnableWebSocketMessageBroker` + `SimpMessagingTemplate` / 프론트: `@stomp/stompjs` 라이브러리
+- 미룬 이유: 현재 사용자 수에서는 client-side 필터링으로 충분. STOMP는 Ver4(확장성) 단계에서 Kafka, Redis와 함께 검토.
 
 ### Ver2에서 결정한 최적화 Backlog
 
