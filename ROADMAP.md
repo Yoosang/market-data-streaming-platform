@@ -43,6 +43,12 @@
 - 미룬 이유: KRX API가 세션 기반 인증을 요구해 단순 HTTP 요청으로는 우회 불가. 해결책 탐색 필요.
 
 
+### STOMP 프로토콜 도입
+- 현재: Raw WebSocket으로 단방향 브로드캐스트. 서버가 모든 종목 시세를 모든 클라이언트에 전송, 프론트에서 client-side 필터링.
+- 개선 시: STOMP의 topic 기반 구독(`/topic/price/AAPL`)으로 클라이언트별 관심종목만 서버에서 선별 전송. 사용자가 많아질수록 불필요한 트래픽 감소.
+- Spring: `@EnableWebSocketMessageBroker` + `SimpMessagingTemplate` / 프론트: `@stomp/stompjs` 라이브러리
+- 미룬 이유: 현재 사용자 수에서는 client-side 필터링으로 충분. STOMP는 Ver4(확장성) 단계에서 Kafka, Redis와 함께 검토.
+
 ### Ver2에서 결정한 최적화 Backlog
 
 **1. 백엔드 필터링 (세션별 관심종목 필터링)**
