@@ -18,14 +18,14 @@ public class WatchlistController {
     @GetMapping
     public List<WatchlistItem> getSymbols(@PathVariable String userId) {
         return watchlistService.getWatchlist(userId).stream()
-                .map(w -> new WatchlistItem(w.getSymbol(), w.getMarket()))
+                .map(w -> new WatchlistItem(w.getSymbol(), w.getMarket(), w.getName()))
                 .toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public void addSymbol(@PathVariable String userId, @RequestBody AddSymbolRequest request) {
-        watchlistService.addSymbol(userId, request.symbol(), request.market());
+        watchlistService.addSymbol(userId, request.symbol(), request.market(), request.name());
     }
 
     @DeleteMapping("/{symbol}")
@@ -34,7 +34,7 @@ public class WatchlistController {
         watchlistService.removeSymbol(userId, symbol);
     }
 
-    record AddSymbolRequest(String symbol, String market) {}
+    record AddSymbolRequest(String symbol, String market, String name) {}
 
-    record WatchlistItem(String symbol, String market) {}
+    record WatchlistItem(String symbol, String market, String name) {}
 }

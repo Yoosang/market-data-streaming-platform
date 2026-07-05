@@ -22,11 +22,11 @@ public class WatchlistService {
     }
 
     @Transactional
-    public void addSymbol(String userId, String symbol, String market) {
+    public void addSymbol(String userId, String symbol, String market, String name) {
         if (watchlistRepository.findByUserIdAndSymbol(userId, symbol).isPresent()) {
             return;
         }
-        watchlistRepository.save(Watchlist.of(userId, symbol, market));
+        watchlistRepository.save(Watchlist.of(userId, symbol, market, name));
         subscriptionManager.subscribe(symbol, market);
     }
 

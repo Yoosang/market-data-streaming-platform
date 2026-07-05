@@ -5,10 +5,14 @@ import { useAlerts } from "@/hooks/useAlerts";
 
 interface Props {
   symbol: string;
+  market: string;
   onMarkTriggered?: (symbol: string) => void;
 }
 
-export default function AlertForm({ symbol, onMarkTriggered }: Props) {
+const formatPrice = (price: number, market: string) =>
+  market === "KR" ? `${price.toLocaleString()}원` : `$${price.toFixed(2)}`;
+
+export default function AlertForm({ symbol, market, onMarkTriggered }: Props) {
   const { alerts, addAlert, removeAlert } = useAlerts(symbol);
   const [targetPrice, setTargetPrice] = useState("");
   const [direction, setDirection] = useState<"ABOVE" | "BELOW">("ABOVE");
@@ -40,7 +44,7 @@ export default function AlertForm({ symbol, onMarkTriggered }: Props) {
                 >
                   {alert.direction === "ABOVE" ? "↑" : "↓"}
                 </span>{" "}
-                ${alert.targetPrice.toFixed(2)}{" "}
+                {formatPrice(alert.targetPrice, market)}{" "}
                 <span className="text-gray-500">
                   {alert.direction === "ABOVE" ? "이상" : "이하"}
                 </span>
