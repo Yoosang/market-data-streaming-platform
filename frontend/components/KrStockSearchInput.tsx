@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useKrStockSearch } from "@/hooks/useKrStockSearch";
 
 interface Props {
@@ -11,7 +11,6 @@ export default function KrStockSearchInput({ onSelect }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const results = useKrStockSearch(query);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSelect = (symbol: string, name: string) => {
     onSelect(symbol, name);
@@ -22,7 +21,6 @@ export default function KrStockSearchInput({ onSelect }: Props) {
   return (
     <div className="relative flex-1">
       <input
-        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}

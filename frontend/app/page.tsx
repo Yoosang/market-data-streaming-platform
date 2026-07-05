@@ -1,16 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useWatchlist } from "@/hooks/useWatchlist";
+import { useWatchlist, Market } from "@/hooks/useWatchlist";
 import { useStockWebSocket, AlertMessage } from "@/hooks/useStockWebSocket";
+import { formatPrice } from "@/lib/format";
 import CandleChart from "@/components/CandleChart";
 import AlertForm from "@/components/AlertForm";
 import KrStockSearchInput from "@/components/KrStockSearchInput";
-
-type Market = "US" | "KR";
-
-const formatPrice = (price: number, market: string) =>
-  market === "KR" ? `${price.toLocaleString()}원` : `$${price.toFixed(2)}`;
 
 export default function Home() {
   const { watchlist, addSymbol, removeSymbol } = useWatchlist();

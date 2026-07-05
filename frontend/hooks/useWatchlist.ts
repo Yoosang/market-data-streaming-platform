@@ -3,7 +3,8 @@ import { getUserId } from "@/lib/userId";
 
 const API_BASE = "http://localhost:8080";
 
-export type WatchlistItem = { symbol: string; market: string; name?: string };
+export type Market = "US" | "KR";
+export type WatchlistItem = { symbol: string; market: Market; name?: string };
 
 export function useWatchlist() {
   const userId = useMemo(() => getUserId(), []);
@@ -17,7 +18,7 @@ export function useWatchlist() {
       .catch(console.error);
   }, [userId]);
 
-  const addSymbol = async (symbol: string, market: string, name?: string) => {
+  const addSymbol = async (symbol: string, market: Market, name?: string) => {
     // KR 종목코드는 숫자라 대소문자 변환 불필요, US는 대문자로 정규화
     const normalized = market === "KR" ? symbol.trim() : symbol.toUpperCase().trim();
     if (!normalized || watchlist.some((w) => w.symbol === normalized)) return;

@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import { useAlerts } from "@/hooks/useAlerts";
+import { Market } from "@/hooks/useWatchlist";
+import { formatPrice } from "@/lib/format";
 
 interface Props {
   symbol: string;
-  market: string;
+  market: Market;
   onMarkTriggered?: (symbol: string) => void;
 }
-
-const formatPrice = (price: number, market: string) =>
-  market === "KR" ? `${price.toLocaleString()}원` : `$${price.toFixed(2)}`;
 
 export default function AlertForm({ symbol, market, onMarkTriggered }: Props) {
   const { alerts, addAlert, removeAlert } = useAlerts(symbol);
