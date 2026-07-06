@@ -1,102 +1,68 @@
-
 # Market Data Streaming Platform
 
-미국 주식 실시간 시세를 모바일 WTS(Wealth Trading System) 스타일로 보여주는 학습용 프로젝트입니다.
+미국·국내 주식 실시간 시세를 모바일 WTS 스타일로 보여주는 학습용 프로젝트입니다.
 
-> **학습 목적으로 단계별로 기능을 추가하며 발전시키는 프로젝트입니다.**
+> **학습 목적으로 단계별 기능을 추가하며 발전시킨 프로젝트입니다.**  
 > Ver1 → Ver2 → Ver3 → Ver4 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
 
 ---
 
-## 현재 버전: Ver1
+## 현재 버전: Ver4 (완료)
 
-### 학습 목표
-- Finnhub WebSocket으로 미국 주식 실시간 시세 수신
-- Spring Boot에서 단일 WebSocket 커넥션 유지 후 프론트엔드로 브로드캐스트
-- React(Next.js) 화면에서 실시간 데이터 렌더링
+### 버전별 학습 목표 요약
 
-### Ver1 범위
-- Finnhub WebSocket 연결 (AAPL, TSLA, MSFT, AMZN 하드코딩)
-- 백엔드 → 프론트엔드 WebSocket 브로드캐스트
-- 모바일 WTS 스타일 레이아웃
-
----
-
-## 프로젝트 구조
-
-```
-marketdata/
-├── backend/           # Spring Boot 백엔드
-│   ├── src/
-│   │   └── main/java/com/usang/marketdata/
-│   │       ├── global/config/        # WebSocket 설정
-│   │       └── infra/finnhub/        # Finnhub WebSocket 클라이언트
-│   ├── build.gradle
-│   └── docker-compose.yml
-└── frontend/          # Next.js 프론트엔드 (Ver1 진행 중)
-```
+| 버전 | 핵심 학습 | 주요 기능 |
+|------|-----------|-----------|
+| Ver1 | WebSocket 기초 | Finnhub 실시간 시세, 브로드캐스트 |
+| Ver2 | DB 설계, 캔들 집계 | 관심종목 저장, 분봉/일봉 차트 |
+| Ver3 | 다중 데이터소스, 알림 | 한국투자증권 API, 가격 알림 |
+| Ver4 | 인증 (JWT) | Spring Security + JWT 로그인 |
 
 ---
 
 ## 기술 스택
 
 | 레이어 | 기술 | 도입 버전 |
-|---|---|---|
-| Backend | Java 17, Spring Boot 4.x, WebSocket | Ver1 |
+|--------|------|-----------|
+| Backend | Java 17, Spring Boot | Ver1 |
 | Frontend | Next.js (App Router), React | Ver1 |
-| 실시간 시세 | Finnhub WebSocket | Ver1 |
-| DB | MySQL | Ver2 |
+| 실시간 시세 (US) | Finnhub WebSocket | Ver1 |
+| DB | MySQL + Spring Data JPA | Ver2 |
 | Chart | TradingView Lightweight Charts | Ver2 |
-| 알림 | 브라우저 알림 / 서버 로그 | Ver3 |
-| 메시징 | Apache Kafka | Ver4 |
-| 인증 | Spring Security + JWT | Ver4 |
-
----
-
-## 버전 로드맵
-
-### Ver1 — 기본 실시간 시세 ← 현재
-- Finnhub WebSocket 실시간 체결가 수신
-- 백엔드 → 프론트엔드 WebSocket 브로드캐스트
-- 고정 종목(AAPL, TSLA, MSFT, AMZN) 실시간 화면
-
-### Ver2 — 관심종목 & 차트
-- MySQL 도입, 사용자별 관심종목 저장 (로그인 없이 임시 ID 기반)
-- 동적 구독 관리
-- 틱 데이터 집계 → 분봉/일봉 캔들 직접 적재
-- TradingView Lightweight Charts 연동
-
-### Ver3 — 알림 & 다중 데이터소스
-- 가격 도달 알림 (브라우저 알림)
-- 한국투자증권 API 추가 연동
-
-### Ver4 — 인증 & 확장성
-- Spring Security + JWT 로그인
-- Kafka 도입으로 멀티 인스턴스 시세 공유
+| 실시간 시세 (KR) | 한국투자증권 WebSocket API | Ver3 |
+| 가격 알림 | 브라우저 Notification API | Ver3 |
+| 인증 | Spring Security + JWT (jjwt) | Ver4 |
 
 ---
 
 ## 실행 방법
 
 ### 사전 요구사항
+
 - Java 17
 - Node.js 18+
+- MySQL 8.x
 - Finnhub API 키 ([무료 가입](https://finnhub.io/))
+- 한국투자증권 API 키 (KR 종목 시세, 선택)
 
-### 백엔드
+### 1. 데이터베이스
 
 ```bash
-# 환경변수 설정
-cp backend/.env.example backend/.env
-# .env에 FINNHUB_API_KEY 값 입력 후 실행
-
-cd backend
-FINNHUB_API_KEY=your_key_here ./gradlew bootRun
+docker-compose up mysql -d
 ```
 
-> IntelliJ를 사용하는 경우: Run Configuration → Environment variables에 `FINNHUB_API_KEY=값` 입력
+또는 로컬 MySQL에서 `dev_db` 스키마를 생성합니다.
 
-### 프론트엔드
+### 2. 백엔드
+
+```bash
+cp backend/.env.example backend/.env
+# .env에 환경변수 값 입력
+cd backend
+./gradlew bootRun
+```
+
+### 3. 프론트엔드
 
 ```bash
 cd frontend
@@ -104,33 +70,101 @@ npm install
 npm run dev
 ```
 
+브라우저에서 `http://localhost:3000` 접속 → 회원가입 → 로그인
+
 ---
 
 ## 환경변수
 
-`backend/.env.example`을 복사해 `.env`를 만들고 아래 값을 채워주세요.
+`backend/.env.example`을 복사해 `backend/.env`를 만들고 아래 값을 채워주세요.
 
-```
+```env
+# Finnhub (미국 주식 실시간 시세)
 FINNHUB_API_KEY=your_finnhub_api_key_here
+
+# 한국투자증권 (국내 주식 실시간 시세, 선택)
+KIS_APP_KEY=your_kis_app_key_here
+KIS_APP_SECRET=your_kis_app_secret_here
+
+# JWT 서명 키 (32자 이상 랜덤 문자열)
+# 생성: openssl rand -base64 48
+JWT_SECRET=your-very-long-random-secret-key-at-least-32-chars
 ```
 
-> Finnhub 무료 티어는 미국 거래소 종목만 실시간 지원합니다.
-> 한국 시간 기준 **야간(밤 10시 ~ 새벽 5시)** 에만 실제 데이터가 흐릅니다.
+> **Finnhub 무료 티어 주의사항**  
+> 미국 거래소 종목만 실시간 지원합니다.  
+> 한국 시간 기준 **밤 10시 ~ 새벽 5시** 에만 실제 데이터가 흐릅니다.
+
+> **한국투자증권 주의사항**  
+> 국내 장 운영시간 **오전 9시 ~ 오후 3시 30분** 에만 데이터가 흐릅니다.
 
 ---
 
-## 패키지 구조 (Backend)
+## 프로젝트 구조
 
 ```
-com.usang.marketdata
-├── global/
-│   └── config/          # WebSocket, 공통 설정
-├── domain/              # 도메인 모델 (Ver2부터)
-├── application/         # 비즈니스 로직 (Ver2부터)
-├── infra/
-│   └── finnhub/         # Finnhub WebSocket 클라이언트
-└── api/                 # REST Controller (Ver2부터)
+marketdata/
+├── backend/
+│   ├── src/main/java/com/usang/marketdata/
+│   │   ├── global/config/        # WebSocket, Security 설정
+│   │   ├── domain/               # 엔티티 (User, Watchlist, PriceAlert, Candle)
+│   │   ├── application/          # 비즈니스 로직 (캔들 집계, 알림 체커, 브로드캐스트)
+│   │   ├── infra/                # 외부 연동 (Finnhub, KIS WebSocket, JWT)
+│   │   └── api/                  # REST Controller, WebSocket Handler
+│   └── build.gradle
+├── frontend/
+│   ├── app/                      # Next.js 페이지 (메인, 로그인)
+│   ├── components/               # CandleChart, AlertForm, KrStockSearchInput
+│   ├── hooks/                    # useStockWebSocket, useWatchlist, useAlerts
+│   └── lib/                      # auth (JWT), format
+└── docker-compose.yml
 ```
+
+---
+
+## 주요 아키텍처
+
+```
+[미국 시세]  Finnhub WebSocket
+                    │
+[국내 시세]  KIS WebSocket ──→ StockBroadcastService (@Async)
+                                      ├─→ CandleAggregator (1분/5분/일봉)
+                                      ├─→ LatestPriceStore (메모리 캐시)
+                                      └─→ StockWebSocketHandler
+                                                  │
+                                       브라우저 WebSocket 클라이언트
+```
+
+- 가격 알림: `PriceAlertChecker` (@Scheduled, 10초마다) → `LatestPriceStore` 조회 → 조건 충족 시 브라우저 알림 전송
+- 인증: JWT 토큰을 `Authorization: Bearer` 헤더로 전달, `JwtAuthenticationFilter`에서 검증
+
+---
+
+## 버전 히스토리
+
+### Ver1 — 기본 실시간 시세 `v1`
+- Finnhub WebSocket 연결 (AAPL, TSLA, MSFT, AMZN 하드코딩)
+- 백엔드 → 프론트엔드 WebSocket 브로드캐스트
+- 모바일 WTS 스타일 레이아웃
+
+### Ver2 — 관심종목 & 차트 `v2`
+- MySQL 도입, 사용자별 관심종목 저장 (로그인 없이 임시 ID 기반)
+- 동적 구독 관리
+- 틱 데이터 집계 → 1분봉 캔들 생성 및 DB 저장
+- TradingView Lightweight Charts 연동
+
+### Ver3 — 알림 & 국내 시세 `v3`
+- 프론트엔드 WebSocket 자동 재연결 (지수 백오프)
+- 가격 알림: 목표가 설정 → 백엔드 감지 → 브라우저 Notification
+- 봉 타임프레임 확장: 5분봉 + 일봉
+- 한국투자증권 WebSocket API 연동 (국내 주식 실시간 시세)
+- 국내 종목 이름 검색 (KRX 종목 JSON 기반)
+
+### Ver4 — 인증 `v4`
+- Spring Security + JWT 회원가입/로그인
+- 모든 API 인증 필수 (`/api/auth/**`, `/ws/**` 제외)
+- `@Async` 브로드캐스트로 KIS IO 스레드 분리
+- KIS WebSocket 재연결 로직 (5s/30s 백오프)
 
 ---
 
@@ -139,6 +173,7 @@ com.usang.marketdata
 ```
 [Ver1] 기능 설명
 [Ver2] 기능 설명
+...
 ```
 
 ---
