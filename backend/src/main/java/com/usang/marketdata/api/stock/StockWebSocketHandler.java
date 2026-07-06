@@ -31,12 +31,17 @@ public class StockWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void sendToAll(String message) {
+        sessions.removeIf(session -> !session.isOpen()); // 닫힌 세션 먼저 정리
+        log.debug("sendToAll: {} session(s), message={}", sessions.size(), message);
+
         for (WebSocketSession session : sessions) {
-            if (!session.isOpen()) continue;
-            try {
-                session.sendMessage(new TextMessage(message));
-            } catch (IOException e) {
-                log.error("Failed to send message to session {}: {}", session.getId(), e.getMessage());
+            synchronized (session) { // 동일 세션에 동시 sendMessage 방지 (@Async 환경)
+                try {
+                    session.sendMessage(new TextMessage(message));
+                } catch (IOException e) {
+                    log.warn("Session {} send failed, removing: {}", session.getId(), e.getMessage());
+                    sessions.remove(session);
+                }
             }
         }
     }

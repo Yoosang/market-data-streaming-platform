@@ -7,6 +7,7 @@ import com.usang.marketdata.application.candle.CandleAggregator;
 import com.usang.marketdata.domain.stock.Trade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,6 +20,9 @@ public class StockBroadcastService {
     private final CandleAggregator candleAggregator;
     private final LatestPriceStore latestPriceStore;
 
+    // KIS/Finnhub IO 스레드에서 분리 — IO 스레드가 직접 sendMessage()를 호출하면
+    // Tomcat WebSocket 내부 상태와 충돌할 수 있어 별도 스레드에서 브로드캐스트
+    @Async
     public void broadcast(Trade trade) {
         candleAggregator.onTrade(trade);
         latestPriceStore.update(trade.symbol(), trade.price()); // 알림 체커가 참조하는 최신가 갱신
