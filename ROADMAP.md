@@ -33,7 +33,7 @@
 
 ---
 
-## Ver5 — 확장성 (예정)
+## 미래 검토 (확장성)
 - Kafka 도입: 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
 - Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소
 
