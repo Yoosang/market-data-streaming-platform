@@ -3,12 +3,14 @@ package com.usang.marketdata.global.config;
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
 @Configuration
 @EnableWebSocket
+@EnableAsync
 @RequiredArgsConstructor
 public class ServerWebSocketConfig implements WebSocketConfigurer {
 

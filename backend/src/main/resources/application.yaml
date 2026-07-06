@@ -1,3 +1,8 @@
+jwt:
+  # HS256 서명에 사용할 비밀키 — 반드시 32자 이상의 랜덤 문자열로 설정
+  secret: ${JWT_SECRET}
+  expiration-ms: 86400000  # 24시간
+
 app:
   finnhub:
     token: ${FINNHUB_API_KEY}
@@ -61,5 +66,7 @@ spring:
 logging:
   level:
     com.usang.marketdata.infra.kis: DEBUG
+    com.usang.marketdata.application.alert: DEBUG
+    com.usang.marketdata.api.stock: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

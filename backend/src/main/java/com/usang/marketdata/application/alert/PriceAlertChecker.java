@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -26,13 +27,19 @@ public class PriceAlertChecker {
     @Scheduled(fixedRate = 10000)
     public void check() {
         List<PriceAlert> activeAlerts = priceAlertRepository.findByTriggeredFalse();
+        log.debug("AlertChecker: {} active alert(s)", activeAlerts.size());
 
         for (PriceAlert alert : activeAlerts) {
-            latestPriceStore.getPrice(alert.getSymbol()).ifPresent(price -> {
-                if (isConditionMet(alert, price)) {
+            Optional<Double> price = latestPriceStore.getPrice(alert.getSymbol());
+            log.debug("AlertChecker: symbol={} target={} {} latestPrice={}",
+                    alert.getSymbol(), alert.getTargetPrice(), alert.getDirection(),
+                    price.map(String::valueOf).orElse("N/A (no price in store)"));
+
+            price.ifPresent(p -> {
+                if (isConditionMet(alert, p)) {
                     alert.trigger();
                     priceAlertRepository.save(alert);
-                    sendAlertToFrontend(alert, price);
+                    sendAlertToFrontend(alert, p);
                 }
             });
         }

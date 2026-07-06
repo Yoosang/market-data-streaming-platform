@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { authHeaders } from "@/lib/auth";
 import {
   createChart,
   CandlestickSeries,
@@ -77,8 +78,8 @@ export default function CandleChart({ symbol }: Props) {
   useEffect(() => {
     if (!seriesRef.current || !symbol) return;
 
-    fetch(`${API_BASE}/api/candles/${symbol}?interval=${interval}&limit=60`)
-      .then((res) => res.json())
+    fetch(`${API_BASE}/api/candles/${symbol}?interval=${interval}&limit=60`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : []))
       .then((data: CandleData[]) => {
         seriesRef.current?.setData(data);
         chartRef.current?.timeScale().fitContent();

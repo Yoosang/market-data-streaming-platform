@@ -7,13 +7,20 @@ import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import com.usang.marketdata.infra.kis.dto.KisRealtimeData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -25,7 +32,14 @@ public class KisWebsocketClient extends TextWebSocketHandler {
     private final WatchlistRepository watchlistRepository;
     private final ObjectMapper objectMapper;
 
+    @Value("${app.kis.ws-uri}")
+    private String kisWsUri;
+
     private WebSocketSession kisSession;
+
+    // 재연결 스케줄링용 — 단일 스레드로 충분
+    private final ScheduledExecutorService reconnectScheduler =
+            Executors.newSingleThreadScheduledExecutor();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -43,6 +57,22 @@ public class KisWebsocketClient extends TextWebSocketHandler {
         log.info("KIS WebSocket connected. Subscribed to: {}", symbols);
     }
 
+    // KIS가 연결을 끊으면 5초 후 재연결 — afterConnectionEstablished에서 구독도 자동으로 재등록됨
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        log.warn("KIS WebSocket disconnected ({}). Reconnecting in 5s...", status);
+        reconnectScheduler.schedule(this::reconnect, 5, TimeUnit.SECONDS);
+    }
+
+    private void reconnect() {
+        try {
+            new StandardWebSocketClient().execute(this, kisWsUri).get();
+        } catch (Exception e) {
+            log.error("KIS reconnect failed: {}. Retrying in 30s...", e.getMessage());
+            reconnectScheduler.schedule(this::reconnect, 30, TimeUnit.SECONDS);
+        }
+    }
+
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
@@ -50,7 +80,17 @@ public class KisWebsocketClient extends TextWebSocketHandler {
         // KIS는 trade 메시지(pipe-delimited)와 JSON 메시지(heartbeat/응답)가 섞여 들어옴
         // '|' 포함 여부로 trade 메시지 판별
         if (!payload.contains("|")) {
-            log.debug("KIS non-trade message: {}", payload);
+            // PINGPONG: KIS가 주기적으로 보내는 keepalive — 그대로 에코하지 않으면 데이터 전송 중단
+            if (payload.contains("PINGPONG")) {
+                try {
+                    session.sendMessage(new TextMessage(payload));
+                    log.debug("KIS PINGPONG responded");
+                } catch (IOException e) {
+                    log.error("KIS PINGPONG response failed: {}", e.getMessage());
+                }
+            } else {
+                log.debug("KIS non-trade message: {}", payload);
+            }
             return;
         }
 
@@ -62,6 +102,7 @@ public class KisWebsocketClient extends TextWebSocketHandler {
             }
 
             KisRealtimeData data = KisRealtimeData.parse(parts[3]);
+            //log.info("KIS trade received: {} price={}", data.symbol(), data.price());
             Trade trade = new Trade(data.symbol(), data.price(), data.volume(), System.currentTimeMillis());
             stockBroadcastService.broadcast(trade);
 

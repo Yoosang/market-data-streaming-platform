@@ -26,10 +26,16 @@
 
 ---
 
-## Ver4 — 인증 & 확장성
-- Spring Security 기반 자체 로그인 (JWT). 소셜로그인/OAuth2까지 확장하지 않음
-- Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소
+## Ver4 — 인증 ✅
+- Spring Security + JWT 자체 로그인 (회원가입/로그인, 토큰 기반 인증)
+- 모든 API 인증 필수, 프론트엔드 로그인/로그아웃 페이지
+- KIS WebSocket 재연결 로직, @Async 브로드캐스트 안정화
+
+---
+
+## 미래 검토 (확장성)
 - Kafka 도입: 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
+- Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소
 
 ---
 

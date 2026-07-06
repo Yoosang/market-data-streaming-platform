@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { getUserId } from "@/lib/userId";
+import { useEffect, useState } from "react";
+import { authHeaders, getToken } from "@/lib/auth";
 
 const API_BASE = "http://localhost:8080";
 
@@ -7,33 +7,32 @@ export type Market = "US" | "KR";
 export type WatchlistItem = { symbol: string; market: Market; name?: string };
 
 export function useWatchlist() {
-  const userId = useMemo(() => getUserId(), []);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
 
   useEffect(() => {
-    if (!userId) return;
-    fetch(`${API_BASE}/api/watchlist/${userId}/symbols`)
-      .then((res) => res.json())
+    if (!getToken()) return;
+    fetch(`${API_BASE}/api/watchlist/symbols`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : []))
       .then(setWatchlist)
       .catch(console.error);
-  }, [userId]);
+  }, []);
 
   const addSymbol = async (symbol: string, market: Market, name?: string) => {
-    // KR 종목코드는 숫자라 대소문자 변환 불필요, US는 대문자로 정규화
     const normalized = market === "KR" ? symbol.trim() : symbol.toUpperCase().trim();
     if (!normalized || watchlist.some((w) => w.symbol === normalized)) return;
 
-    await fetch(`${API_BASE}/api/watchlist/${userId}/symbols`, {
+    await fetch(`${API_BASE}/api/watchlist/symbols`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ symbol: normalized, market, name }),
     });
     setWatchlist((prev) => [...prev, { symbol: normalized, market, name }]);
   };
 
   const removeSymbol = async (symbol: string) => {
-    await fetch(`${API_BASE}/api/watchlist/${userId}/symbols/${symbol}`, {
+    await fetch(`${API_BASE}/api/watchlist/symbols/${symbol}`, {
       method: "DELETE",
+      headers: authHeaders(),
     });
     setWatchlist((prev) => prev.filter((w) => w.symbol !== symbol));
   };

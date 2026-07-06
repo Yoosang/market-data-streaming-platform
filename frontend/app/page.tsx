@@ -1,18 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useWatchlist, Market } from "@/hooks/useWatchlist";
 import { useStockWebSocket, AlertMessage } from "@/hooks/useStockWebSocket";
 import { formatPrice } from "@/lib/format";
+import { isLoggedIn, removeToken } from "@/lib/auth";
 import CandleChart from "@/components/CandleChart";
 import AlertForm from "@/components/AlertForm";
 import KrStockSearchInput from "@/components/KrStockSearchInput";
 
 export default function Home() {
+  const router = useRouter();
   const { watchlist, addSymbol, removeSymbol } = useWatchlist();
   const [input, setInput] = useState("");
   const [market, setMarket] = useState<Market>("US");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+
+  // 미로그인 시 로그인 페이지로 이동
+  useEffect(() => {
+    if (!isLoggedIn()) router.push("/login");
+  }, [router]);
 
   // 브라우저 Notification 권한을 최초 1회 요청
   useEffect(() => {
@@ -38,9 +46,7 @@ export default function Home() {
     [watchlist]
   );
 
-  // useStockWebSocket은 string[] 을 받으므로 symbol 문자열만 추출
-  const symbolStrings = useMemo(() => watchlist.map((w) => w.symbol), [watchlist]);
-  const prices = useStockWebSocket(symbolStrings, handleAlert);
+  const prices = useStockWebSocket(handleAlert);
 
   const handleAdd = () => {
     const trimmed = input.trim();
@@ -64,9 +70,18 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center py-8 px-4">
-      <h1 className="text-lg font-semibold text-gray-300 mb-6 tracking-widest uppercase">
-        Stock Market · Live
-      </h1>
+      {/* 헤더 */}
+      <div className="w-full max-w-sm flex items-center justify-between mb-6">
+        <h1 className="text-lg font-semibold text-gray-300 tracking-widest uppercase">
+          Stock Market · Live
+        </h1>
+        <button
+          onClick={() => { removeToken(); router.push("/login"); }}
+          className="text-xs text-gray-600 hover:text-gray-400"
+        >
+          로그아웃
+        </button>
+      </div>
 
       {/* US / KR 시장 선택 */}
       <div className="flex gap-1 bg-gray-800 rounded-xl p-1 w-full max-w-sm mb-3">
