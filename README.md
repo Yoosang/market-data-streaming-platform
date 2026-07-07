@@ -17,6 +17,7 @@
 | Ver2 | DB 설계, 캔들 집계 | 관심종목 저장, 분봉/일봉 차트 |
 | Ver3 | 다중 데이터소스, 알림 | 한국투자증권 API, 가격 알림 |
 | Ver4 | 인증 (JWT) | Spring Security + JWT 로그인 |
+| Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
 
 ---
 
@@ -32,6 +33,7 @@
 | 실시간 시세 (KR) | 한국투자증권 WebSocket API | Ver3 |
 | 가격 알림 | 브라우저 Notification API | Ver3 |
 | 인증 | Spring Security + JWT (jjwt) | Ver4 |
+| AI 브리핑 | Claude API (claude-haiku) | Ver5 |
 
 ---
 
@@ -89,6 +91,10 @@ KIS_APP_SECRET=your_kis_app_secret_here
 # JWT 서명 키 (32자 이상 랜덤 문자열)
 # 생성: openssl rand -base64 48
 JWT_SECRET=your-very-long-random-secret-key-at-least-32-chars
+
+# Anthropic Claude API 키 (Ver5 AI 브리핑)
+# https://console.anthropic.com/ 에서 발급
+ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 ```
 
 > **Finnhub 무료 티어 주의사항**  
@@ -165,6 +171,12 @@ marketdata/
 - 모든 API 인증 필수 (`/api/auth/**`, `/ws/**` 제외)
 - `@Async` 브로드캐스트로 KIS IO 스레드 분리
 - KIS WebSocket 재연결 로직 (5s/30s 백오프)
+
+### Ver5 — AI 브리핑 `v5`
+- 5분 전 기준가 대비 5% 이상 급등/급락 감지 (`SurgeDetector`)
+- Finnhub 뉴스 API로 최근 헤드라인 조회 (US 종목)
+- Claude API (claude-haiku) 호출 → 한 줄 브리핑 생성
+- 브라우저에 SURGE 배너 즉시 + AI 분석 결과 후속 표시
 
 ---
 
