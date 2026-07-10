@@ -15,14 +15,38 @@ export interface AlertMessage {
   direction: "ABOVE" | "BELOW";
 }
 
-export function useStockWebSocket(onAlert?: (alert: AlertMessage) => void) {
+export interface SurgeMessage {
+  type: "SURGE";
+  symbol: string;
+  currentPrice: number;
+  baselinePrice: number;
+  changePercent: number;
+  direction: "UP" | "DOWN";
+}
+
+export interface AiBriefingMessage {
+  type: "AI_BRIEFING";
+  symbol: string;
+  briefing: string;
+  newsCount: number;
+}
+
+export function useStockWebSocket(
+  onAlert?: (alert: AlertMessage) => void,
+  onSurge?: (surge: SurgeMessage) => void,
+  onAiBriefing?: (briefing: AiBriefingMessage) => void,
+) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
-  // onAlert도 ref로 관리 — 콜백이 바뀌어도 WebSocket을 재연결하지 않음
+  // 콜백이 바뀌어도 WebSocket을 재연결하지 않도록 ref로 관리
   const onAlertRef = useRef(onAlert);
-  useEffect(() => {
-    onAlertRef.current = onAlert;
-  }, [onAlert]);
+  useEffect(() => { onAlertRef.current = onAlert; }, [onAlert]);
+
+  const onSurgeRef = useRef(onSurge);
+  useEffect(() => { onSurgeRef.current = onSurge; }, [onSurge]);
+
+  const onAiBriefingRef = useRef(onAiBriefing);
+  useEffect(() => { onAiBriefingRef.current = onAiBriefing; }, [onAiBriefing]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -62,9 +86,17 @@ export function useStockWebSocket(onAlert?: (alert: AlertMessage) => void) {
         try {
           const msg = JSON.parse(event.data);
 
-          // type 필드가 있으면 알림 메시지 — trade 메시지와 분기
+          // type 필드로 메시지 종류 분기
           if (msg.type === "ALERT") {
             onAlertRef.current?.(msg as AlertMessage);
+            return;
+          }
+          if (msg.type === "SURGE") {
+            onSurgeRef.current?.(msg as SurgeMessage);
+            return;
+          }
+          if (msg.type === "AI_BRIEFING") {
+            onAiBriefingRef.current?.(msg as AiBriefingMessage);
             return;
           }
 

@@ -32,7 +32,7 @@ public class StockWebSocketHandler extends TextWebSocketHandler {
 
     public void sendToAll(String message) {
         sessions.removeIf(session -> !session.isOpen()); // 닫힌 세션 먼저 정리
-        log.debug("sendToAll: {} session(s), message={}", sessions.size(), message);
+        //log.debug("sendToAll: {} session(s), message={}", sessions.size(), message);
 
         for (WebSocketSession session : sessions) {
             synchronized (session) { // 동일 세션에 동시 sendMessage 방지 (@Async 환경)

@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWatchlist, Market } from "@/hooks/useWatchlist";
-import { useStockWebSocket, AlertMessage } from "@/hooks/useStockWebSocket";
+import { useStockWebSocket, AlertMessage, SurgeMessage, AiBriefingMessage } from "@/hooks/useStockWebSocket";
 import { formatPrice } from "@/lib/format";
 import { isLoggedIn, removeToken } from "@/lib/auth";
 import CandleChart from "@/components/CandleChart";
 import AlertForm from "@/components/AlertForm";
 import KrStockSearchInput from "@/components/KrStockSearchInput";
+import SurgeBriefingPanel from "@/components/SurgeBriefingPanel";
 
 export default function Home() {
   const router = useRouter();
@@ -16,6 +17,14 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [market, setMarket] = useState<Market>("US");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+
+  // 급등/급락 이벤트 상태 — symbol별로 surge 정보와 AI 브리핑을 함께 관리
+  const [surgeEvents, setSurgeEvents] = useState<Record<string, {
+    surge: SurgeMessage;
+    briefing?: string;
+    loading: boolean;
+    market: "US" | "KR";
+  }>>({});
 
   // 미로그인 시 로그인 페이지로 이동
   useEffect(() => {
@@ -46,7 +55,32 @@ export default function Home() {
     [watchlist]
   );
 
-  const prices = useStockWebSocket(handleAlert);
+  // SURGE: 즉시 카드 표시 (loading=true), 30초 후 자동 제거
+  const handleSurge = useCallback((surge: SurgeMessage) => {
+    const item = watchlist.find((w) => w.symbol === surge.symbol);
+    const m = (item?.market ?? "US") as "US" | "KR";
+    setSurgeEvents((prev) => ({
+      ...prev,
+      [surge.symbol]: { surge, loading: true, market: m },
+    }));
+    setTimeout(() => {
+      setSurgeEvents((prev) => {
+        const next = { ...prev };
+        delete next[surge.symbol];
+        return next;
+      });
+    }, 30000);
+  }, [watchlist]);
+
+  // AI_BRIEFING: 같은 symbol의 카드에 브리핑 텍스트 업데이트
+  const handleAiBriefing = useCallback((msg: AiBriefingMessage) => {
+    setSurgeEvents((prev) => {
+      if (!prev[msg.symbol]) return prev;
+      return { ...prev, [msg.symbol]: { ...prev[msg.symbol], briefing: msg.briefing, loading: false } };
+    });
+  }, []);
+
+  const prices = useStockWebSocket(handleAlert, handleSurge, handleAiBriefing);
 
   const handleAdd = () => {
     const trimmed = input.trim();
@@ -123,6 +157,9 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* 급등/급락 AI 브리핑 패널 */}
+      <SurgeBriefingPanel surgeEvents={surgeEvents} />
 
       {/* 관심종목 목록 */}
       <div className="w-full max-w-sm space-y-2">
