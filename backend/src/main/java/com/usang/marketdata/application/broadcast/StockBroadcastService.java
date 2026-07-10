@@ -4,6 +4,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import com.usang.marketdata.application.alert.LatestPriceStore;
 import com.usang.marketdata.application.candle.CandleAggregator;
+import com.usang.marketdata.application.surge.SurgeDetector;
 import com.usang.marketdata.domain.stock.Trade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class StockBroadcastService {
     private final ObjectMapper objectMapper;
     private final CandleAggregator candleAggregator;
     private final LatestPriceStore latestPriceStore;
+    private final SurgeDetector surgeDetector;
 
     // KIS/Finnhub IO 스레드에서 분리 — IO 스레드가 직접 sendMessage()를 호출하면
     // Tomcat WebSocket 내부 상태와 충돌할 수 있어 별도 스레드에서 브로드캐스트
@@ -33,5 +35,7 @@ public class StockBroadcastService {
         } catch (Exception e) {
             log.error("Failed to serialize trade: {}", e.getMessage());
         }
+
+        surgeDetector.onTrade(trade); // 5% 급등/급락 감지 → SURGE + AI 브리핑 트리거
     }
 }

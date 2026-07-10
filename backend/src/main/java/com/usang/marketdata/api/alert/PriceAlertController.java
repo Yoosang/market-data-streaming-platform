@@ -40,9 +40,9 @@ public class PriceAlertController {
         priceAlertRepository.deleteById(id);
     }
 
-    record AlertRequest(String symbol, double targetPrice, AlertDirection direction) {}
+    public record AlertRequest(String symbol, double targetPrice, AlertDirection direction) {}
 
-    record AlertResponse(Long id, String symbol, double targetPrice,
+    public record AlertResponse(Long id, String symbol, double targetPrice,
                          AlertDirection direction, boolean triggered, LocalDateTime createdAt) {
         static AlertResponse from(PriceAlert alert) {
             return new AlertResponse(
