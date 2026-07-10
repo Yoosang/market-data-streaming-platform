@@ -1,6 +1,10 @@
 package com.usang.marketdata.application.surge;
 
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
+import com.usang.marketdata.application.news.NewsRetrievalService;
+import com.usang.marketdata.domain.news.NewsArticle;
+import com.usang.marketdata.domain.watchlist.Watchlist;
+import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -25,12 +33,19 @@ class AiBriefingServiceTest {
     @Mock
     private RestClient restClient;
 
+    @Mock
+    private NewsRetrievalService newsRetrievalService;
+
+    @Mock
+    private WatchlistRepository watchlistRepository;
+
     private AiBriefingService aiBriefingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        aiBriefingService = new AiBriefingService(stockWebSocketHandler, objectMapper, restClient);
+        aiBriefingService = new AiBriefingService(stockWebSocketHandler, objectMapper, restClient,
+                newsRetrievalService, watchlistRepository);
         // @Value 필드는 Spring 컨텍스트 없이는 주입되지 않아 ReflectionTestUtils로 설정
         ReflectionTestUtils.setField(aiBriefingService, "anthropicApiKey", "test-api-key");
         ReflectionTestUtils.setField(aiBriefingService, "model", "claude-test");
@@ -73,16 +88,50 @@ class AiBriefingServiceTest {
     }
 
     @Test
-    @DisplayName("KR 종목(숫자 코드)은 Finnhub 뉴스 API를 호출하지 않는다")
-    void KR_종목은_뉴스_API_미호출() {
+    @DisplayName("KR 종목(숫자 코드)은 Finnhub 뉴스 API 대신 RAG 검색을 사용한다")
+    void KR_종목은_Finnhub_대신_RAG_사용() {
         // given: POST 실패 (뉴스 호출 여부만 검증하기 위해 빠르게 종료)
         when(restClient.post()).thenThrow(new RuntimeException("fail"));
+        when(watchlistRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
+        when(newsRetrievalService.findRelevant(eq("005930"), anyString(), eq(3))).thenReturn(List.of());
 
         // when: 국내 종목 코드 (숫자)
         aiBriefingService.generateAsync("005930", 5.1, "UP");
 
-        // then: 뉴스 조회용 GET은 호출되지 않음
+        // then: Finnhub 뉴스 조회용 GET은 호출되지 않고, RAG 검색이 대신 호출됨
         verify(restClient, never()).get();
+        verify(newsRetrievalService).findRelevant(eq("005930"), anyString(), eq(3));
+    }
+
+    @Test
+    @DisplayName("KR 종목 급등 시 관심종목에 등록된 회사명으로 RAG 검색 쿼리를 구성한다")
+    void KR_종목_회사명_기반_RAG_쿼리_구성() {
+        // given: Claude 호출 자체는 이 테스트의 관심사가 아니므로 실패시켜 빠르게 종료
+        when(restClient.post()).thenThrow(new RuntimeException("fail"));
+        when(watchlistRepository.findFirstBySymbol("005930"))
+                .thenReturn(Optional.of(Watchlist.of("user1", "005930", "KR", "삼성전자")));
+        NewsArticle article = NewsArticle.of("005930", "삼성전자", "삼성전자 실적 서프라이즈",
+                "설명", "https://example.com", LocalDateTime.now());
+        when(newsRetrievalService.findRelevant("005930", "삼성전자 주가 급등 이유", 3))
+                .thenReturn(List.of(article));
+
+        // when
+        aiBriefingService.generateAsync("005930", 6.0, "UP");
+
+        // then: 회사명("삼성전자") + 방향("급등") 기반 쿼리로 RAG 검색이 호출됨
+        verify(newsRetrievalService).findRelevant("005930", "삼성전자 주가 급등 이유", 3);
+    }
+
+    @Test
+    @DisplayName("관심종목에 없는 KR 심볼은 회사명 대신 심볼 코드로 RAG 쿼리를 구성한다")
+    void 관심종목에_없는_KR_심볼은_심볼코드로_쿼리_구성() {
+        when(restClient.post()).thenThrow(new RuntimeException("fail"));
+        when(watchlistRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
+        when(newsRetrievalService.findRelevant(eq("005930"), anyString(), eq(3))).thenReturn(List.of());
+
+        aiBriefingService.generateAsync("005930", -6.0, "DOWN");
+
+        verify(newsRetrievalService).findRelevant("005930", "005930 주가 급락 이유", 3);
     }
 
     @Test

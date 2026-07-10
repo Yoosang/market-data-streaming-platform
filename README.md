@@ -3,11 +3,11 @@
 미국·국내 주식 실시간 시세를 모바일 WTS 스타일로 보여주는 학습용 프로젝트입니다.
 
 > **학습 목적으로 단계별 기능을 추가하며 발전시킨 프로젝트입니다.**  
-> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
+> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 → Ver6 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
 
 ---
 
-## 현재 버전: Ver5 (완료)
+## 현재 버전: Ver6 (완료)
 
 ### 버전별 학습 목표 요약
 
@@ -18,6 +18,7 @@
 | Ver3 | 다중 데이터소스, 알림 | 한국투자증권 API, 가격 알림 |
 | Ver4 | 인증 (JWT) | Spring Security + JWT 로그인 |
 | Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
+| Ver6 | RAG (검색 증강 생성) | 뉴스 임베딩 + 벡터 유사도 검색으로 KR 브리핑 개선 |
 
 ---
 
@@ -34,6 +35,8 @@
 | 가격 알림 | 브라우저 Notification API | Ver3 |
 | 인증 | Spring Security + JWT (jjwt) | Ver4 |
 | AI 브리핑 | Claude API (claude-haiku) | Ver5 |
+| KR 뉴스 수집 | 네이버 뉴스 검색 API | Ver6 |
+| 임베딩 / RAG | OpenAI Embeddings (text-embedding-3-small) | Ver6 |
 
 ---
 
@@ -46,6 +49,8 @@
 - MySQL 8.x
 - Finnhub API 키 ([무료 가입](https://finnhub.io/))
 - 한국투자증권 API 키 (KR 종목 시세, 선택)
+- 네이버 개발자센터 API 키 (KR 뉴스 수집, [애플리케이션 등록](https://developers.naver.com/apps/#/register))
+- OpenAI API 키 (뉴스 임베딩, [발급](https://platform.openai.com/api-keys))
 
 ### 1. 데이터베이스
 
@@ -95,6 +100,15 @@ JWT_SECRET=your-very-long-random-secret-key-at-least-32-chars
 # Anthropic Claude API 키 (Ver5 AI 브리핑)
 # https://console.anthropic.com/ 에서 발급
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
+
+# 네이버 뉴스 검색 API (Ver6 RAG — KR 종목 뉴스 수집)
+# https://developers.naver.com/apps/#/register 에서 애플리케이션 등록 후 발급
+NAVER_CLIENT_ID=your_naver_client_id_here
+NAVER_CLIENT_SECRET=your_naver_client_secret_here
+
+# OpenAI Embeddings API 키 (Ver6 RAG — 뉴스 임베딩)
+# https://platform.openai.com/api-keys 에서 발급
+OPENAI_API_KEY=sk-your-openai-api-key-here
 ```
 
 > **Finnhub 무료 티어 주의사항**  
@@ -113,9 +127,9 @@ marketdata/
 ├── backend/
 │   ├── src/main/java/com/usang/marketdata/
 │   │   ├── global/config/        # WebSocket, Security 설정
-│   │   ├── domain/               # 엔티티 (User, Watchlist, PriceAlert, Candle)
-│   │   ├── application/          # 비즈니스 로직 (캔들 집계, 알림 체커, 브로드캐스트)
-│   │   ├── infra/                # 외부 연동 (Finnhub, KIS WebSocket, JWT)
+│   │   ├── domain/               # 엔티티 (User, Watchlist, PriceAlert, Candle, NewsArticle)
+│   │   ├── application/          # 비즈니스 로직 (캔들 집계, 알림 체커, 브로드캐스트, 뉴스 수집/검색)
+│   │   ├── infra/                # 외부 연동 (Finnhub, KIS WebSocket, JWT, 네이버 뉴스, OpenAI 임베딩)
 │   │   └── api/                  # REST Controller, WebSocket Handler
 │   └── build.gradle
 ├── frontend/
@@ -140,14 +154,23 @@ marketdata/
                                       └─→ SurgeDetector
                                                ├─→ SURGE 메시지 즉시 전송
                                                └─→ AiBriefingService (@Async)
-                                                       ├─→ Finnhub 뉴스 조회 (US)
+                                                       ├─→ US: Finnhub 뉴스 조회
+                                                       ├─→ KR: NewsRetrievalService 유사도 검색 (RAG)
                                                        ├─→ Claude API 호출
                                                        └─→ AI_BRIEFING 메시지 전송
+
+[Ver6 RAG 배치 파이프라인] (관심종목 KR 뉴스, 30분 주기)
+NewsCollectionScheduler (@Scheduled)
+        └─→ NaverNewsClient (뉴스 검색) ──→ OpenAiEmbeddingClient (임베딩)
+                                                    └─→ NewsArticle 저장 (MySQL, 벡터는 JSON 직렬화)
+                                                              ↑
+                                     NewsRetrievalService가 코사인 유사도로 조회 (급등 감지 시)
 ```
 
 - 가격 알림: `PriceAlertChecker` (@Scheduled, 10초마다) → `LatestPriceStore` 조회 → 조건 충족 시 브라우저 알림 전송
 - 인증: JWT 토큰을 `Authorization: Bearer` 헤더로 전달, `JwtAuthenticationFilter`에서 검증
 - AI 브리핑: 전일 종가 대비 5% 변동 감지 → SURGE 즉시 전송 → Claude API 비동기 호출 → AI_BRIEFING 후속 전송
+- RAG: 관심종목(KR) 뉴스를 미리 수집·임베딩해 MySQL에 저장해두고, 급등 감지 시 종목명 기반 쿼리로 코사인 유사도가 가장 높은 기사를 검색해 Claude 프롬프트에 주입 (벡터 DB 없이 애플리케이션 레벨 브루트포스 계산)
 
 ---
 
@@ -187,6 +210,14 @@ marketdata/
   - 10분 쿨다운으로 동일 종목 과호출 방지
 - SURGE 메시지(즉시) + AI_BRIEFING 메시지(1~3초 후) 두 단계 WebSocket 푸시
 - 브라우저: 급등(빨간)/급락(파란) 배너 → AI 분석 텍스트로 교체 → 30초 후 자동 제거
+
+### Ver6 — RAG 기반 KR 종목 뉴스 브리핑 `v6`
+- Ver5의 한계 보완: Finnhub이 KR 종목 뉴스를 지원하지 않아 국내 종목 브리핑이 일반적인 시장 맥락에만 의존하던 문제를 RAG로 해결
+- `NewsCollectionScheduler` (@Scheduled, 30분마다): 관심종목(KR)의 회사명으로 네이버 뉴스 검색 → URL 중복 스킵 → 신규 기사만 저장
+- `OpenAiEmbeddingClient`: OpenAI `text-embedding-3-small`로 기사 임베딩 생성, `float[]` ↔ JSON 문자열 직렬화
+- `NewsArticle`: 벡터 DB 없이 MySQL TEXT 컬럼에 임베딩을 JSON으로 저장 (이 프로젝트 스케일에서는 브루트포스 코사인 유사도로 충분하다고 판단)
+- `NewsRetrievalService`: 급등/급락 감지 시 "{종목명} 주가 급등/급락 이유" 쿼리를 임베딩해 저장된 코퍼스와 코사인 유사도 계산 → 상위 3개 기사를 Claude 프롬프트에 주입
+- `AiBriefingService`의 KR 분기를 RAG 검색으로 교체 (US 분기의 Finnhub 뉴스 조회는 그대로 유지)
 
 ---
 
