@@ -16,6 +16,12 @@ app:
     api-key: ${ANTHROPIC_API_KEY}
     # claude-haiku: 빠른 응답속도 + 저렴한 비용 — 한 줄 브리핑 생성에 적합
     model: claude-haiku-4-5-20251001
+  naver:
+    client-id: ${NAVER_CLIENT_ID}
+    client-secret: ${NAVER_CLIENT_SECRET}
+  openai:
+    api-key: ${OPENAI_API_KEY}
+    embedding-model: text-embedding-3-small
 
 spring:
   application:
