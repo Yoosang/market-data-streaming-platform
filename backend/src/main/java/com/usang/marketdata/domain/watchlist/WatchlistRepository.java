@@ -18,4 +18,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
 
     // market별 종목 조회 — 각 WebSocket 클라이언트가 시작 시 자신이 담당할 종목만 구독하기 위해 사용
     List<Watchlist> findByMarket(String market);
+
+    // KR 종목명 조회용 — AI 브리핑 RAG 쿼리 구성 시 사용자 구분 없이 종목명만 필요
+    Optional<Watchlist> findFirstBySymbol(String symbol);
 }

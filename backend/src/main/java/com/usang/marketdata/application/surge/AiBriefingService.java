@@ -1,6 +1,10 @@
 package com.usang.marketdata.application.surge;
 
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
+import com.usang.marketdata.application.news.NewsRetrievalService;
+import com.usang.marketdata.domain.news.NewsArticle;
+import com.usang.marketdata.domain.watchlist.Watchlist;
+import com.usang.marketdata.domain.watchlist.WatchlistRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,20 +43,26 @@ public class AiBriefingService {
     private final ObjectMapper objectMapper;
     // RestClient를 생성자로 주입 — 테스트에서 mock으로 교체 가능하게 설계
     private final RestClient restClient;
+    private final NewsRetrievalService newsRetrievalService;
+    private final WatchlistRepository watchlistRepository;
 
     public AiBriefingService(StockWebSocketHandler stockWebSocketHandler,
                               ObjectMapper objectMapper,
-                              RestClient restClient) {
+                              RestClient restClient,
+                              NewsRetrievalService newsRetrievalService,
+                              WatchlistRepository watchlistRepository) {
         this.stockWebSocketHandler = stockWebSocketHandler;
         this.objectMapper = objectMapper;
         this.restClient = restClient;
+        this.newsRetrievalService = newsRetrievalService;
+        this.watchlistRepository = watchlistRepository;
     }
 
     // @Async: SURGE 전송 후 별도 스레드에서 실행 — AI 응답 지연이 시세 흐름을 막지 않음
     @Async
     public void generateAsync(String symbol, double changePercent, String direction) {
         try {
-            List<String> headlines = fetchNewsHeadlines(symbol);
+            List<String> headlines = fetchNewsHeadlines(symbol, direction);
             String briefing = callClaudeApi(symbol, changePercent, direction, headlines);
             briefing = validateAndFallback(briefing);
             sendBriefingMessage(symbol, briefing, headlines.size());
@@ -62,10 +72,9 @@ public class AiBriefingService {
         }
     }
 
-    // Finnhub REST API로 최근 뉴스 헤드라인 조회 (US 종목만 지원)
-    // KR 종목(숫자로 시작)은 Finnhub 뉴스 미지원 → 빈 리스트 반환
-    private List<String> fetchNewsHeadlines(String symbol) {
-        if (symbol.matches("\\d+")) return List.of(); // KR 종목 코드는 숫자
+    // US 종목: Finnhub 뉴스 헤드라인. KR 종목(숫자 코드): RAG로 수집된 뉴스 코퍼스에서 유사도 검색
+    private List<String> fetchNewsHeadlines(String symbol, String direction) {
+        if (symbol.matches("\\d+")) return fetchKrNewsHeadlines(symbol, direction);
 
         try {
             String today = LocalDate.now().toString();
@@ -84,6 +93,24 @@ public class AiBriefingService {
             return headlines;
         } catch (Exception e) {
             log.warn("Failed to fetch news for {}: {}", symbol, e.getMessage());
+            return List.of();
+        }
+    }
+
+    // 미리 수집·임베딩된 KR 뉴스 코퍼스에서 이 종목의 급등/급락과 가장 관련 있는 기사를 검색 (RAG)
+    private List<String> fetchKrNewsHeadlines(String symbol, String direction) {
+        try {
+            String companyName = watchlistRepository.findFirstBySymbol(symbol)
+                    .map(Watchlist::getName)
+                    .orElse(symbol);
+            String movement = direction.equals("UP") ? "급등" : "급락";
+            String queryText = "%s 주가 %s 이유".formatted(companyName, movement);
+
+            return newsRetrievalService.findRelevant(symbol, queryText, 3).stream()
+                    .map(NewsArticle::getTitle)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Failed to retrieve KR news for {}: {}", symbol, e.getMessage());
             return List.of();
         }
     }
