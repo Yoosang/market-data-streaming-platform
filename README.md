@@ -3,11 +3,11 @@
 미국·국내 주식 실시간 시세를 모바일 WTS 스타일로 보여주는 학습용 프로젝트입니다.
 
 > **학습 목적으로 단계별 기능을 추가하며 발전시킨 프로젝트입니다.**  
-> Ver1 → Ver2 → Ver3 → Ver4 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
+> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
 
 ---
 
-## 현재 버전: Ver4 (완료)
+## 현재 버전: Ver5 (완료)
 
 ### 버전별 학습 목표 요약
 
@@ -136,13 +136,18 @@ marketdata/
 [국내 시세]  KIS WebSocket ──→ StockBroadcastService (@Async)
                                       ├─→ CandleAggregator (1분/5분/일봉)
                                       ├─→ LatestPriceStore (메모리 캐시)
-                                      └─→ StockWebSocketHandler
-                                                  │
-                                       브라우저 WebSocket 클라이언트
+                                      ├─→ StockWebSocketHandler ──→ 브라우저
+                                      └─→ SurgeDetector
+                                               ├─→ SURGE 메시지 즉시 전송
+                                               └─→ AiBriefingService (@Async)
+                                                       ├─→ Finnhub 뉴스 조회 (US)
+                                                       ├─→ Claude API 호출
+                                                       └─→ AI_BRIEFING 메시지 전송
 ```
 
 - 가격 알림: `PriceAlertChecker` (@Scheduled, 10초마다) → `LatestPriceStore` 조회 → 조건 충족 시 브라우저 알림 전송
 - 인증: JWT 토큰을 `Authorization: Bearer` 헤더로 전달, `JwtAuthenticationFilter`에서 검증
+- AI 브리핑: 전일 종가 대비 5% 변동 감지 → SURGE 즉시 전송 → Claude API 비동기 호출 → AI_BRIEFING 후속 전송
 
 ---
 
@@ -173,10 +178,15 @@ marketdata/
 - KIS WebSocket 재연결 로직 (5s/30s 백오프)
 
 ### Ver5 — AI 브리핑 `v5`
-- 5분 전 기준가 대비 5% 이상 급등/급락 감지 (`SurgeDetector`)
-- Finnhub 뉴스 API로 최근 헤드라인 조회 (US 종목)
-- Claude API (claude-haiku) 호출 → 한 줄 브리핑 생성
-- 브라우저에 SURGE 배너 즉시 + AI 분석 결과 후속 표시
+- 전일 종가 대비 5% 이상 급등/급락 감지 (`SurgeDetector`)
+  - US: Finnhub REST API `pc`(previous close) 필드
+  - KR: KIS REST API `stck_prdy_clpr`(전일 종가) 필드
+- Finnhub 뉴스 API로 최근 헤드라인 조회 (US 종목) → Claude 프롬프트에 주입
+- Claude API (claude-haiku, `@Async`) 호출 → 한 줄 브리핑 생성
+  - temperature 0.3, max_tokens 150, 1회 retry, 실패 시 fallback
+  - 10분 쿨다운으로 동일 종목 과호출 방지
+- SURGE 메시지(즉시) + AI_BRIEFING 메시지(1~3초 후) 두 단계 WebSocket 푸시
+- 브라우저: 급등(빨간)/급락(파란) 배너 → AI 분석 텍스트로 교체 → 30초 후 자동 제거
 
 ---
 
