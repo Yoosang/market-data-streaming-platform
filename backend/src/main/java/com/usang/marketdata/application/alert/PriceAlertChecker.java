@@ -62,7 +62,8 @@ public class PriceAlertChecker {
                     "targetPrice", alert.getTargetPrice(),
                     "direction", alert.getDirection().name()
             );
-            stockWebSocketHandler.sendToAll(objectMapper.writeValueAsString(message));
+            // 본인 알림이므로 전체 브로드캐스트가 아닌 소유자 세션에만 전송 (다른 사용자의 목표가 노출 방지)
+            stockWebSocketHandler.sendToUser(alert.getUserId(), objectMapper.writeValueAsString(message));
             log.info("Alert triggered: {} {} {} (current: {})",
                     alert.getSymbol(), alert.getDirection(), alert.getTargetPrice(), currentPrice);
         } catch (Exception e) {

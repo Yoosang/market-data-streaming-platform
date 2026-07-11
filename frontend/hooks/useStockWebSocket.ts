@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getToken } from "@/lib/auth";
 
 export interface Trade {
   symbol: string;
@@ -60,7 +61,12 @@ export function useStockWebSocket(
     function connect() {
       if (closed) return;
 
-      const ws = new WebSocket("ws://localhost:8080/ws/stock");
+      // ALERT 메시지를 본인에게만 받기 위해 토큰을 쿼리 파라미터로 전달 (없어도 연결은 허용됨)
+      const token = getToken();
+      const url = token
+        ? `ws://localhost:8080/ws/stock?token=${encodeURIComponent(token)}`
+        : "ws://localhost:8080/ws/stock";
+      const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
