@@ -50,6 +50,45 @@
 
 ---
 
+## Ver7 — 프로덕션 하드닝 (진행 중)
+- **배경**: Ver1~6까지 개발 속도 위주로 기능을 쌓아와서 품질 점검이 부족했다고 판단, 실제 AWS에
+  배포해 쓸 수 있는 수준으로 다듬기로 함. 백엔드 품질/테스트, 보안/설정, 배포 준비, 프론트+기능
+  인벤토리 4개 관점으로 전체 코드베이스를 감사한 뒤 아래 단계로 나눠 진행
+
+- **즉시 버그 수정** ✅ (Ver7 태그와 별개로 먼저 처리한 실제 버그)
+  - IDOR: `PriceAlertController.deleteAlert`에 소유권 체크가 없어 누구나 남의 알림을 삭제 가능하던 문제
+  - WebSocket이 `ALERT` 메시지(다른 사용자의 목표가 포함)를 인증 없이 전체 브로드캐스트하던 문제
+    → `JwtHandshakeInterceptor`로 연결 시 토큰을 검증해 세션에 userId 부여,
+      `StockWebSocketHandler.sendToUser`로 본인에게만 전송 (공개 데이터는 기존 브로드캐스트 유지)
+  - `symbol` 값이 검증 없이 외부 API URL에 그대로 삽입되던 인젝션 여지 → 관심종목/알림 등록
+    시점에 형식 검증 추가
+  - KIS 접근토큰(`KisAccessTokenProvider`)과 approval key(`KisApprovalKeyProvider`)가
+    앱을 재기동할 때마다 재발급되던 문제 → 로컬 파일에 캐싱해 재기동 간 재사용 (개발 중 반복
+    재시작으로 KIS 발급 API를 과호출해 계정 제한 경고를 받은 것이 계기)
+
+- **Ver7-1: 배포 최소요건** (진행 중) — "AWS에 실제로 띄울 수 있는 최소 상태" 목표, 스케일링
+  대응은 제외
+  - Dockerfile (backend/frontend)
+  - 프론트 하드코딩된 `localhost:8080` API/WS URL을 환경변수로 전환
+  - 백엔드 `application-prod.yaml` 분리, Flyway 도입, CORS/WS origin 환경변수화
+  - Actuator 헬스체크가 인증 없이 동작하도록 `/actuator/health` 예외 처리
+  - `RestClient` 타임아웃 설정, `@Async` 전용 스레드풀 적용
+  - `spring-boot-starter-validation` 실제 활성화 + 전역 예외 처리
+
+- **Ver7-2: 기능 감사** (예정) — Finnhub(미장 시간대 제한)/KIS(개인 계정 키)/AI 브리핑(비용,
+  관심종목당 무제한 트리거 가능)/RAG(Ver6, 스스로 "학습용 브루트포스"라 명시) 등 구조적 제약이
+  있는 기능을 유지·데모모드·제거 중 무엇으로 할지 제품 관점에서 결정. 관심종목/알림 개수
+  제한(비용 리스크 방지)도 함께 처리
+
+- **Ver7-3: 스케일링 대응** (예정) — 현재 모든 상태(최신가 캐시, 급등 감지 기준가/쿨다운, 캔들
+  집계, WebSocket 세션)가 JVM 로컬 메모리라 다중 인스턴스로 확장 불가. Redis 캐시/pub-sub 도입,
+  `@Scheduled` 작업 분산 락 등 — 실제 다중 인스턴스 배포 계획이 생기면 진행
+
+- **Ver7-4: 실제 AWS 배포** (예정) — ECS/App Runner/EC2 중 선택, RDS 전환, Secrets Manager
+  연동, CI/CD 파이프라인
+
+---
+
 ## 미래 검토 (확장성)
 - Kafka 도입: 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
 - Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소

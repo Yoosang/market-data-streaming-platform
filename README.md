@@ -3,11 +3,14 @@
 미국·국내 주식 실시간 시세를 모바일 WTS 스타일로 보여주는 학습용 프로젝트입니다.
 
 > **학습 목적으로 단계별 기능을 추가하며 발전시킨 프로젝트입니다.**  
-> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 → Ver6 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
+> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 → Ver6 → Ver7 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
 
 ---
 
-## 현재 버전: Ver6 (완료)
+## 현재 버전: Ver7 (진행 중)
+
+Ver1~6까지 개발 속도 위주로 기능을 쌓아온 뒤, 실제 AWS에 배포해 쓸 수 있는 수준으로 다듬는
+프로덕션 하드닝 단계입니다. 자세한 진행 상황은 [ROADMAP.md](./ROADMAP.md)의 Ver7 항목을 참고하세요.
 
 ### 버전별 학습 목표 요약
 
@@ -19,6 +22,7 @@
 | Ver4 | 인증 (JWT) | Spring Security + JWT 로그인 |
 | Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
 | Ver6 | RAG (검색 증강 생성) | 뉴스 임베딩 + 벡터 유사도 검색으로 KR 브리핑 개선 |
+| Ver7 | 프로덕션 하드닝 | 보안 버그 수정 + AWS 배포 최소 요건 (진행 중) |
 
 ---
 
@@ -171,6 +175,7 @@ NewsCollectionScheduler (@Scheduled)
 - 인증: JWT 토큰을 `Authorization: Bearer` 헤더로 전달, `JwtAuthenticationFilter`에서 검증
 - AI 브리핑: 전일 종가 대비 5% 변동 감지 → SURGE 즉시 전송 → Claude API 비동기 호출 → AI_BRIEFING 후속 전송
 - RAG: 관심종목(KR) 뉴스를 미리 수집·임베딩해 MySQL에 저장해두고, 급등 감지 시 종목명 기반 쿼리로 코사인 유사도가 가장 높은 기사를 검색해 Claude 프롬프트에 주입 (벡터 DB 없이 애플리케이션 레벨 브루트포스 계산)
+- WebSocket 인증(Ver7): 연결 시 쿼리파라미터로 받은 JWT를 `JwtHandshakeInterceptor`가 검증해 세션에 userId 부여 (토큰 없어도 연결은 허용). 개인 알림(`ALERT`)은 `sendToUser`로 본인 세션에만 전송, 시세/SURGE/AI_BRIEFING 등 공개 데이터는 기존처럼 전체 브로드캐스트
 
 ---
 
@@ -218,6 +223,18 @@ NewsCollectionScheduler (@Scheduled)
 - `NewsArticle`: 벡터 DB 없이 MySQL TEXT 컬럼에 임베딩을 JSON으로 저장 (이 프로젝트 스케일에서는 브루트포스 코사인 유사도로 충분하다고 판단)
 - `NewsRetrievalService`: 급등/급락 감지 시 "{종목명} 주가 급등/급락 이유" 쿼리를 임베딩해 저장된 코퍼스와 코사인 유사도 계산 → 상위 3개 기사를 Claude 프롬프트에 주입
 - `AiBriefingService`의 KR 분기를 RAG 검색으로 교체 (US 분기의 Finnhub 뉴스 조회는 그대로 유지)
+
+### Ver7 — 프로덕션 하드닝 (진행 중)
+- 전체 코드베이스 감사(백엔드 품질/테스트, 보안/설정, 배포 준비, 프론트+기능) 후 발견한 문제를
+  우선순위화해 단계별로 진행 — 자세한 계획은 [ROADMAP.md](./ROADMAP.md) 참고
+- 즉시 수정한 버그:
+  - IDOR — 알림 삭제에 소유권 체크 없이 누구나 남의 알림 삭제 가능하던 문제
+  - WebSocket이 `ALERT`(다른 사용자 목표가 포함)를 인증 없이 전체 브로드캐스트하던 문제 →
+    핸드셰이크 시 JWT 검증 후 본인에게만 전송하도록 수정
+  - `symbol`이 검증 없이 외부 API URL에 삽입되던 인젝션 여지 → 입력 경계에 형식 검증 추가
+  - KIS 접근토큰/approval key가 앱 재기동마다 재발급되어 KIS 측 계정 제한 경고를 받은 문제 →
+    파일 캐싱으로 재기동 간 재사용
+- Ver7-1(배포 최소요건: Dockerfile, 환경변수화, prod 설정 분리, 헬스체크 등) 진행 중
 
 ---
 
