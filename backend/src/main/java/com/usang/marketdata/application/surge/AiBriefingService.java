@@ -3,8 +3,7 @@ package com.usang.marketdata.application.surge;
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import com.usang.marketdata.application.news.NewsRetrievalService;
 import com.usang.marketdata.domain.news.NewsArticle;
-import com.usang.marketdata.domain.watchlist.Watchlist;
-import com.usang.marketdata.domain.watchlist.WatchlistRepository;
+import com.usang.marketdata.domain.news.NewsArticleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,18 +43,18 @@ public class AiBriefingService {
     // RestClient를 생성자로 주입 — 테스트에서 mock으로 교체 가능하게 설계
     private final RestClient restClient;
     private final NewsRetrievalService newsRetrievalService;
-    private final WatchlistRepository watchlistRepository;
+    private final NewsArticleRepository newsArticleRepository;
 
     public AiBriefingService(StockWebSocketHandler stockWebSocketHandler,
                               ObjectMapper objectMapper,
                               RestClient restClient,
                               NewsRetrievalService newsRetrievalService,
-                              WatchlistRepository watchlistRepository) {
+                              NewsArticleRepository newsArticleRepository) {
         this.stockWebSocketHandler = stockWebSocketHandler;
         this.objectMapper = objectMapper;
         this.restClient = restClient;
         this.newsRetrievalService = newsRetrievalService;
-        this.watchlistRepository = watchlistRepository;
+        this.newsArticleRepository = newsArticleRepository;
     }
 
     // @Async: SURGE 전송 후 별도 스레드에서 실행 — AI 응답 지연이 시세 흐름을 막지 않음
@@ -98,13 +97,13 @@ public class AiBriefingService {
     }
 
     // 미리 수집·임베딩된 KR 뉴스 코퍼스에서 이 종목의 급등/급락과 가장 관련 있는 기사를 검색 (RAG)
+    // 회사명은 수집된 뉴스 코퍼스 자체에서 조회 — 관심종목에서 삭제돼도(Watchlist row 소멸) 코퍼스는 남아있어 어긋나지 않음
     private List<String> fetchKrNewsHeadlines(String symbol, String direction) {
         try {
-            String companyName = watchlistRepository.findFirstBySymbol(symbol)
-                    .map(Watchlist::getName)
+            String companyName = newsArticleRepository.findFirstBySymbol(symbol)
+                    .map(NewsArticle::getCompanyName)
                     .orElse(symbol);
-            String movement = direction.equals("UP") ? "급등" : "급락";
-            String queryText = "%s 주가 %s 이유".formatted(companyName, movement);
+            String queryText = "%s 주가 %s 이유".formatted(companyName, movementLabel(direction));
 
             return newsRetrievalService.findRelevant(symbol, queryText, 3).stream()
                     .map(NewsArticle::getTitle)
@@ -113,6 +112,10 @@ public class AiBriefingService {
             log.warn("Failed to retrieve KR news for {}: {}", symbol, e.getMessage());
             return List.of();
         }
+    }
+
+    private String movementLabel(String direction) {
+        return direction.equals("UP") ? "급등" : "급락";
     }
 
     private String callClaudeApi(String symbol, double changePercent, String direction,
@@ -124,7 +127,7 @@ public class AiBriefingService {
                 """;
 
         String sign = changePercent > 0 ? "+" : "";
-        String movement = direction.equals("UP") ? "급등" : "급락";
+        String movement = movementLabel(direction);
         String userPrompt;
 
         if (headlines.isEmpty()) {

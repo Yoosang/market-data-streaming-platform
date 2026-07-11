@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// KR 종목 뉴스 기사 — RAG 코퍼스의 저장 단위. embedding은 Step2에서 채워짐(그 전까지 null)
+// KR 종목 뉴스 기사 — RAG 코퍼스의 저장 단위
 @Entity
 @Table(name = "news_article")
 @Getter
@@ -48,8 +48,8 @@ public class NewsArticle {
         createdAt = LocalDateTime.now();
     }
 
-    public static NewsArticle of(String symbol, String companyName, String title,
-                                  String description, String url, LocalDateTime publishedAt) {
+    public static NewsArticle of(String symbol, String companyName, String title, String description,
+                                  String url, LocalDateTime publishedAt, String embedding) {
         NewsArticle article = new NewsArticle();
         article.symbol = symbol;
         article.companyName = companyName;
@@ -57,10 +57,7 @@ public class NewsArticle {
         article.description = description;
         article.url = url;
         article.publishedAt = publishedAt;
+        article.embedding = embedding;
         return article;
-    }
-
-    public void applyEmbedding(String embedding) {
-        this.embedding = embedding;
     }
 }

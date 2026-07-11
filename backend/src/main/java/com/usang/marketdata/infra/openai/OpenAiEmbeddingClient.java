@@ -35,19 +35,18 @@ public class OpenAiEmbeddingClient {
 
     public float[] embed(String text) {
         Map<String, Object> body = Map.of("model", model, "input", text);
-        String responseStr = restClient.post()
+        OpenAiEmbeddingResponse response = restClient.post()
                 .uri(OPENAI_EMBEDDINGS_URL)
                 .header("Authorization", "Bearer " + apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(objectMapper.writeValueAsString(body))
                 .retrieve()
-                .body(String.class);
-        return parseEmbedding(responseStr);
+                .body(OpenAiEmbeddingResponse.class);
+        return toFloatArray(response);
     }
 
     // 패키지 내부 테스트에서 직접 검증하기 위해 package-private
-    float[] parseEmbedding(String responseJson) {
-        OpenAiEmbeddingResponse response = objectMapper.readValue(responseJson, OpenAiEmbeddingResponse.class);
+    float[] toFloatArray(OpenAiEmbeddingResponse response) {
         List<Double> values = response.data().get(0).embedding();
         float[] result = new float[values.size()];
         for (int i = 0; i < values.size(); i++) {

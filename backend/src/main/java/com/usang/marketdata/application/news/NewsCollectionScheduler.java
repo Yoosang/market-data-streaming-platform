@@ -37,10 +37,9 @@ public class NewsCollectionScheduler {
                 // 같은 종목을 여러 사용자가 담아도 종목당 한 번만 수집
                 .collect(Collectors.toMap(Watchlist::getSymbol, Watchlist::getName, (a, b) -> a));
 
-        int saved = 0;
-        for (Map.Entry<String, String> entry : symbolToName.entrySet()) {
-            saved += collectForSymbol(entry.getKey(), entry.getValue());
-        }
+        int saved = symbolToName.entrySet().stream()
+                .mapToInt(entry -> collectForSymbol(entry.getKey(), entry.getValue()))
+                .sum();
         log.info("News collection finished: {} symbol(s) scanned, {} new article(s) saved",
                 symbolToName.size(), saved);
     }
@@ -52,10 +51,9 @@ public class NewsCollectionScheduler {
             if (newsArticleRepository.existsByUrl(item.link())) continue;
 
             try {
-                NewsArticle article = NewsArticle.of(symbol, companyName, item.title(),
-                        item.description(), item.link(), parsePublishedAt(item.pubDate()));
                 float[] embedding = openAiEmbeddingClient.embed(item.title() + " " + item.description());
-                article.applyEmbedding(openAiEmbeddingClient.serialize(embedding));
+                NewsArticle article = NewsArticle.of(symbol, companyName, item.title(), item.description(),
+                        item.link(), parsePublishedAt(item.pubDate()), openAiEmbeddingClient.serialize(embedding));
                 newsArticleRepository.save(article);
                 saved++;
             } catch (Exception e) {

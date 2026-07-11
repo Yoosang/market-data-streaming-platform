@@ -81,14 +81,11 @@ class NewsRetrievalServiceTest {
     @DisplayName("코사인 유사도가 높은 순으로 topK개만 반환한다")
     void 유사도_상위_topK_반환() {
         NewsArticle low = NewsArticle.of("005930", "삼성전자", "낮은 유사도 기사", "설명",
-                "https://a.com", LocalDateTime.now());
+                "https://a.com", LocalDateTime.now(), "low-json");
         NewsArticle high = NewsArticle.of("005930", "삼성전자", "높은 유사도 기사", "설명",
-                "https://b.com", LocalDateTime.now());
+                "https://b.com", LocalDateTime.now(), "high-json");
         NewsArticle mid = NewsArticle.of("005930", "삼성전자", "중간 유사도 기사", "설명",
-                "https://c.com", LocalDateTime.now());
-        low.applyEmbedding("low-json");
-        high.applyEmbedding("high-json");
-        mid.applyEmbedding("mid-json");
+                "https://c.com", LocalDateTime.now(), "mid-json");
 
         when(newsArticleRepository.findBySymbol("005930")).thenReturn(List.of(low, high, mid));
 

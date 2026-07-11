@@ -23,13 +23,16 @@ public class NewsRetrievalService {
 
         float[] queryEmbedding = openAiEmbeddingClient.embed(queryText);
 
+        // 기사마다 유사도를 한 번씩만 계산한 뒤 정렬 — Comparator 안에서 매번 재계산하지 않도록
         return candidates.stream()
-                .sorted(Comparator.comparingDouble((NewsArticle a) ->
-                        cosineSimilarity(queryEmbedding, openAiEmbeddingClient.deserialize(a.getEmbedding()))
-                ).reversed())
+                .map(a -> new Scored(a, cosineSimilarity(queryEmbedding, openAiEmbeddingClient.deserialize(a.getEmbedding()))))
+                .sorted(Comparator.comparingDouble(Scored::similarity).reversed())
                 .limit(topK)
+                .map(Scored::article)
                 .toList();
     }
+
+    private record Scored(NewsArticle article, double similarity) {}
 
     // 코사인 유사도: 두 벡터가 가리키는 방향이 얼마나 비슷한지 (1에 가까울수록 유사, -1이면 정반대)
     // 패키지 내부 테스트에서 직접 검증하기 위해 package-private
