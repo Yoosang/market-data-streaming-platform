@@ -56,7 +56,8 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
-    show-sql: true
+    # 스케줄러(알림 체커 등)가 반복 실행될 때마다 SQL이 로그를 뒤덮어서 끔 — 필요하면 로컬에서 잠깐 true로
+    show-sql: false
 
   # ── Ver4에서 활성화 ──
   # kafka:

@@ -27,11 +27,11 @@ public class PriceAlertChecker {
     @Scheduled(fixedRate = 10000)
     public void check() {
         List<PriceAlert> activeAlerts = priceAlertRepository.findByTriggeredFalse();
-        log.info("AlertChecker: {} active alert(s)", activeAlerts.size());
 
         for (PriceAlert alert : activeAlerts) {
             Optional<Double> price = latestPriceStore.getPrice(alert.getSymbol());
-            log.info("AlertChecker: symbol={} target={} {} latestPrice={}",
+            // 종목별 상세 내역은 디버깅용 — 평소에는 완료 로그 한 줄만 남도록 debug로 낮춤
+            log.debug("AlertChecker: symbol={} target={} {} latestPrice={}",
                     alert.getSymbol(), alert.getTargetPrice(), alert.getDirection(),
                     price.map(String::valueOf).orElse("N/A (no price in store)"));
 
@@ -43,6 +43,8 @@ public class PriceAlertChecker {
                 }
             });
         }
+
+        log.info("AlertChecker: {} active alert(s) checked", activeAlerts.size());
     }
 
     private boolean isConditionMet(PriceAlert alert, double currentPrice) {
