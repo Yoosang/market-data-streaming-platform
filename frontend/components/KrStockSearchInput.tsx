@@ -27,19 +27,19 @@ export default function KrStockSearchInput({ onSelect }: Props) {
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="종목명 입력 (예: 삼성전자)"
-        className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 text-sm outline-none placeholder-gray-600"
+        className="w-full bg-surface-tile-2 text-body-on-dark rounded-pill px-5 py-3 text-[17px] outline-none placeholder-ink-muted-48"
       />
 
       {open && results.length > 0 && (
-        <ul className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-lg">
+        <ul className="absolute z-10 w-full mt-1 bg-surface-tile-2 border border-hairline-on-dark rounded-lg overflow-hidden shadow-lg">
           {results.map((s) => (
             <li
               key={s.symbol}
               onMouseDown={() => handleSelect(s.symbol, s.name)}
-              className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-gray-700 text-sm"
+              className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-surface-tile-3 text-sm"
             >
-              <span className="text-white font-medium">{s.name}</span>
-              <span className="text-gray-500 text-xs ml-2">{s.symbol}</span>
+              <span className="text-body-on-dark font-medium">{s.name}</span>
+              <span className="text-body-muted text-xs ml-2">{s.symbol}</span>
             </li>
           ))}
         </ul>
