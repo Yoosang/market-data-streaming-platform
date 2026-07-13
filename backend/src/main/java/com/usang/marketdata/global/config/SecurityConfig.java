@@ -36,6 +36,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()   // 로그인/회원가입은 인증 없이 허용
                         .requestMatchers("/ws/**").permitAll()          // WebSocket 핸드셰이크도 허용
+                        // ResponseStatusException(4xx)이 던져지면 서블릿 컨테이너가 /error로 내부 forward함 —
+                        // 이 경로를 막아두면 그 forward도 인증 검사에 걸려 원래 상태코드가 403으로 덮어써짐
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 // 모든 요청에서 JWT를 먼저 확인 후 Spring Security 기본 인증 필터 실행
