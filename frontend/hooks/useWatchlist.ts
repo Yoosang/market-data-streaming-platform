@@ -4,7 +4,7 @@ import { authHeaders, getToken } from "@/lib/auth";
 const API_BASE = "http://localhost:8080";
 
 export type Market = "US" | "KR";
-export type WatchlistItem = { symbol: string; market: Market; name?: string };
+type WatchlistItem = { symbol: string; market: Market; name?: string };
 
 export function useWatchlist() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);

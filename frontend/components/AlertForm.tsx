@@ -8,10 +8,9 @@ import { formatPrice } from "@/lib/format";
 interface Props {
   symbol: string;
   market: Market;
-  onMarkTriggered?: (symbol: string) => void;
 }
 
-export default function AlertForm({ symbol, market, onMarkTriggered }: Props) {
+export default function AlertForm({ symbol, market }: Props) {
   const { alerts, addAlert, removeAlert } = useAlerts(symbol);
   const [targetPrice, setTargetPrice] = useState("");
   const [direction, setDirection] = useState<"ABOVE" | "BELOW">("ABOVE");
