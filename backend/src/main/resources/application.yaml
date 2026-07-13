@@ -22,6 +22,9 @@ app:
   openai:
     api-key: ${OPENAI_API_KEY}
     embedding-model: text-embedding-3-small
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN}
+    chat-id: ${TELEGRAM_CHAT_ID}
 
 spring:
   application:
@@ -76,7 +79,6 @@ spring:
 logging:
   level:
     com.usang.marketdata.infra.kis: DEBUG
-    com.usang.marketdata.application.alert: DEBUG
     com.usang.marketdata.api.stock: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { getToken } from "@/lib/auth";
 
 export interface Trade {
   symbol: string;
   price: number;
   volume: number;
   timestamp: number;
-}
-
-export interface AlertMessage {
-  type: "ALERT";
-  symbol: string;
-  price: number;
-  targetPrice: number;
-  direction: "ABOVE" | "BELOW";
 }
 
 export interface SurgeMessage {
@@ -33,16 +24,12 @@ export interface AiBriefingMessage {
 }
 
 export function useStockWebSocket(
-  onAlert?: (alert: AlertMessage) => void,
   onSurge?: (surge: SurgeMessage) => void,
   onAiBriefing?: (briefing: AiBriefingMessage) => void,
 ) {
   const [prices, setPrices] = useState<Record<string, Trade>>({});
 
   // 콜백이 바뀌어도 WebSocket을 재연결하지 않도록 ref로 관리
-  const onAlertRef = useRef(onAlert);
-  useEffect(() => { onAlertRef.current = onAlert; }, [onAlert]);
-
   const onSurgeRef = useRef(onSurge);
   useEffect(() => { onSurgeRef.current = onSurge; }, [onSurge]);
 
@@ -61,12 +48,7 @@ export function useStockWebSocket(
     function connect() {
       if (closed) return;
 
-      // ALERT 메시지를 본인에게만 받기 위해 토큰을 쿼리 파라미터로 전달 (없어도 연결은 허용됨)
-      const token = getToken();
-      const url = token
-        ? `ws://localhost:8080/ws/stock?token=${encodeURIComponent(token)}`
-        : "ws://localhost:8080/ws/stock";
-      const ws = new WebSocket(url);
+      const ws = new WebSocket("ws://localhost:8080/ws/stock");
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -93,10 +75,6 @@ export function useStockWebSocket(
           const msg = JSON.parse(event.data);
 
           // type 필드로 메시지 종류 분기
-          if (msg.type === "ALERT") {
-            onAlertRef.current?.(msg as AlertMessage);
-            return;
-          }
           if (msg.type === "SURGE") {
             onSurgeRef.current?.(msg as SurgeMessage);
             return;

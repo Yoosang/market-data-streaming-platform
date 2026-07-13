@@ -39,17 +39,6 @@ public class StockWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    // ALERT처럼 본인에게만 보내야 하는 메시지용 — 핸드셰이크 시 토큰이 없었던 세션에는 전송되지 않음
-    public void sendToUser(String userId, String message) {
-        sessions.removeIf(session -> !session.isOpen());
-
-        for (WebSocketSession session : sessions) {
-            if (userId.equals(session.getAttributes().get("userId"))) {
-                send(session, message);
-            }
-        }
-    }
-
     private void send(WebSocketSession session, String message) {
         synchronized (session) { // 동일 세션에 동시 sendMessage 방지 (@Async 환경)
             try {
