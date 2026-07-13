@@ -52,11 +52,11 @@ public class PriceAlertController {
             @NotNull AlertDirection direction) {}
 
     public record AlertResponse(Long id, String symbol, double targetPrice,
-                         AlertDirection direction, boolean triggered, LocalDateTime createdAt) {
+                         AlertDirection direction, LocalDateTime createdAt) {
         static AlertResponse from(PriceAlert alert) {
             return new AlertResponse(
                     alert.getId(), alert.getSymbol(), alert.getTargetPrice(),
-                    alert.getDirection(), alert.isTriggered(), alert.getCreatedAt());
+                    alert.getDirection(), alert.getCreatedAt());
         }
     }
 }

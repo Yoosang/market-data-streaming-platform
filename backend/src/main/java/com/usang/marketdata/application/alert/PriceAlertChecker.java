@@ -23,10 +23,10 @@ public class PriceAlertChecker {
     private final WatchlistRepository watchlistRepository;
     private final TelegramNotifier telegramNotifier;
 
-    // 10초마다 미트리거 알림 전체를 순회하며 조건 충족 여부 확인
+    // 10초마다 전체 알림을 순회하며 조건 충족 여부 확인 — 트리거된 알림은 이력을 남길 필요가 없어 바로 삭제
     @Scheduled(fixedRate = 10000)
     public void check() {
-        List<PriceAlert> activeAlerts = priceAlertRepository.findByTriggeredFalse();
+        List<PriceAlert> activeAlerts = priceAlertRepository.findAll();
 
         for (PriceAlert alert : activeAlerts) {
             Optional<Double> price = latestPriceStore.getPrice(alert.getSymbol());
@@ -37,8 +37,7 @@ public class PriceAlertChecker {
 
             price.ifPresent(p -> {
                 if (isConditionMet(alert, p)) {
-                    alert.trigger();
-                    priceAlertRepository.save(alert);
+                    priceAlertRepository.delete(alert);
                     notifyTelegram(alert, p);
                 }
             });

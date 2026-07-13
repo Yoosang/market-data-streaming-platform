@@ -31,9 +31,6 @@ public class PriceAlert {
     @Column(nullable = false, length = 10)
     private AlertDirection direction;
 
-    @Column(nullable = false)
-    private boolean triggered = false;
-
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -49,9 +46,5 @@ public class PriceAlert {
         alert.targetPrice = targetPrice;
         alert.direction = direction;
         return alert;
-    }
-
-    public void trigger() {
-        this.triggered = true;
     }
 }
