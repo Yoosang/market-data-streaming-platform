@@ -13,6 +13,9 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
     // 유사도 검색 대상 코퍼스 조회 (종목별)
     List<NewsArticle> findBySymbol(String symbol);
 
+    // 상세 페이지 뉴스 목록 조회용 — 최신순 상위 5건
+    List<NewsArticle> findTop5BySymbolOrderByPublishedAtDesc(String symbol);
+
     // RAG 쿼리 구성 시 회사명 조회용 — 코퍼스가 있다면 항상 정확한 회사명을 가지고 있음
     Optional<NewsArticle> findFirstBySymbol(String symbol);
 }

@@ -73,6 +73,12 @@ public class SurgeDetector {
         }
     }
 
+    // 온디맨드 AI 분석(AiBriefingController)에서도 재사용 — 캐시에 있으면 그대로, 없으면 새로 조회(캐시에 반영하지 않음)
+    public double getPreviousClose(String symbol) {
+        Double cached = baselinePrices.get(symbol);
+        return cached != null ? cached : fetchPreviousClose(symbol);
+    }
+
     // US 종목: Finnhub /quote의 pc(previous close) 필드
     // KR 종목: KIS REST API의 stck_prdy_clpr(전일 종가) 필드
     // 조회 실패 시 0 반환 → onTrade에서 첫 틱 가격으로 대체

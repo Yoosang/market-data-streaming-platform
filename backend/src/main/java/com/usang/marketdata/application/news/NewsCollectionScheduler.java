@@ -44,7 +44,8 @@ public class NewsCollectionScheduler {
                 symbolToName.size(), saved);
     }
 
-    private int collectForSymbol(String symbol, String companyName) {
+    // 상세 페이지의 "뉴스 새로고침"에서 특정 종목만 즉시 수집할 때도 재사용
+    public int collectForSymbol(String symbol, String companyName) {
         List<NaverNewsItem> items = naverNewsClient.search(companyName);
         int saved = 0;
         for (NaverNewsItem item : items) {

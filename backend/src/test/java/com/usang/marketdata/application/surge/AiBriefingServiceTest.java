@@ -4,6 +4,7 @@ import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import com.usang.marketdata.application.news.NewsRetrievalService;
 import com.usang.marketdata.domain.news.NewsArticle;
 import com.usang.marketdata.domain.news.NewsArticleRepository;
+import com.usang.marketdata.infra.finnhub.FinnhubNewsClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,17 +39,19 @@ class AiBriefingServiceTest {
     @Mock
     private NewsArticleRepository newsArticleRepository;
 
+    @Mock
+    private FinnhubNewsClient finnhubNewsClient;
+
     private AiBriefingService aiBriefingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
         aiBriefingService = new AiBriefingService(stockWebSocketHandler, objectMapper, restClient,
-                newsRetrievalService, newsArticleRepository);
+                newsRetrievalService, newsArticleRepository, finnhubNewsClient);
         // @Value 필드는 Spring 컨텍스트 없이는 주입되지 않아 ReflectionTestUtils로 설정
         ReflectionTestUtils.setField(aiBriefingService, "anthropicApiKey", "test-api-key");
         ReflectionTestUtils.setField(aiBriefingService, "model", "claude-test");
-        ReflectionTestUtils.setField(aiBriefingService, "finnhubToken", "test-token");
     }
 
     @Test
@@ -97,8 +100,8 @@ class AiBriefingServiceTest {
         // when: 국내 종목 코드 (숫자)
         aiBriefingService.generateAsync("005930", 5.1, "UP");
 
-        // then: Finnhub 뉴스 조회용 GET은 호출되지 않고, RAG 검색이 대신 호출됨
-        verify(restClient, never()).get();
+        // then: Finnhub 뉴스 클라이언트는 호출되지 않고, RAG 검색이 대신 호출됨
+        verifyNoInteractions(finnhubNewsClient);
         verify(newsRetrievalService).findRelevant(eq("005930"), anyString(), eq(3));
     }
 

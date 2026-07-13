@@ -4,6 +4,8 @@ import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import com.usang.marketdata.application.news.NewsRetrievalService;
 import com.usang.marketdata.domain.news.NewsArticle;
 import com.usang.marketdata.domain.news.NewsArticleRepository;
+import com.usang.marketdata.infra.finnhub.FinnhubNewsClient;
+import com.usang.marketdata.infra.finnhub.dto.FinnhubNewsItem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,8 +16,6 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +27,6 @@ public class AiBriefingService {
     private static final String FALLBACK = "현재 AI 분석을 일시적으로 제공할 수 없습니다.";
     private static final int MAX_BRIEFING_LENGTH = 150;
     private static final String ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-    private static final String FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/company-news";
 
     @Value("${app.anthropic.api-key}")
     private String anthropicApiKey;
@@ -35,26 +34,26 @@ public class AiBriefingService {
     @Value("${app.anthropic.model}")
     private String model;
 
-    @Value("${app.finnhub.token}")
-    private String finnhubToken;
-
     private final StockWebSocketHandler stockWebSocketHandler;
     private final ObjectMapper objectMapper;
     // RestClient를 생성자로 주입 — 테스트에서 mock으로 교체 가능하게 설계
     private final RestClient restClient;
     private final NewsRetrievalService newsRetrievalService;
     private final NewsArticleRepository newsArticleRepository;
+    private final FinnhubNewsClient finnhubNewsClient;
 
     public AiBriefingService(StockWebSocketHandler stockWebSocketHandler,
                               ObjectMapper objectMapper,
                               RestClient restClient,
                               NewsRetrievalService newsRetrievalService,
-                              NewsArticleRepository newsArticleRepository) {
+                              NewsArticleRepository newsArticleRepository,
+                              FinnhubNewsClient finnhubNewsClient) {
         this.stockWebSocketHandler = stockWebSocketHandler;
         this.objectMapper = objectMapper;
         this.restClient = restClient;
         this.newsRetrievalService = newsRetrievalService;
         this.newsArticleRepository = newsArticleRepository;
+        this.finnhubNewsClient = finnhubNewsClient;
     }
 
     // @Async: SURGE 전송 후 별도 스레드에서 실행 — AI 응답 지연이 시세 흐름을 막지 않음
@@ -74,26 +73,7 @@ public class AiBriefingService {
     // US 종목: Finnhub 뉴스 헤드라인. KR 종목(숫자 코드): RAG로 수집된 뉴스 코퍼스에서 유사도 검색
     private List<String> fetchNewsHeadlines(String symbol, String direction) {
         if (symbol.matches("\\d+")) return fetchKrNewsHeadlines(symbol, direction);
-
-        try {
-            String today = LocalDate.now().toString();
-            String yesterday = LocalDate.now().minusDays(1).toString();
-            String url = "%s?symbol=%s&from=%s&to=%s&token=%s"
-                    .formatted(FINNHUB_NEWS_URL, symbol, yesterday, today, finnhubToken);
-
-            String response = restClient.get().uri(url).retrieve().body(String.class);
-            JsonNode articles = objectMapper.readTree(response);
-
-            List<String> headlines = new ArrayList<>();
-            for (int i = 0; i < Math.min(3, articles.size()); i++) {
-                String headline = articles.get(i).path("headline").asText();
-                if (!headline.isBlank()) headlines.add(headline);
-            }
-            return headlines;
-        } catch (Exception e) {
-            log.warn("Failed to fetch news for {}: {}", symbol, e.getMessage());
-            return List.of();
-        }
+        return finnhubNewsClient.fetchNews(symbol).stream().map(FinnhubNewsItem::headline).toList();
     }
 
     // 미리 수집·임베딩된 KR 뉴스 코퍼스에서 이 종목의 급등/급락과 가장 관련 있는 기사를 검색 (RAG)
