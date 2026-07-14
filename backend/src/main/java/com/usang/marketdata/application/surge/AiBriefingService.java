@@ -180,7 +180,7 @@ public class AiBriefingService {
                     "briefing", briefing,
                     "newsCount", newsCount
             );
-            stockWebSocketHandler.sendToAll(objectMapper.writeValueAsString(message));
+            stockWebSocketHandler.sendToWatchers(symbol, objectMapper.writeValueAsString(message));
             log.info("AI briefing sent for {}: {}", symbol, briefing);
         } catch (Exception e) {
             log.error("Failed to send AI_BRIEFING for {}: {}", symbol, e.getMessage());

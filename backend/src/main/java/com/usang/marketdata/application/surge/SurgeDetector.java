@@ -142,7 +142,7 @@ public class SurgeDetector {
                     "changePercent", Math.round(changePercent * 100.0) / 100.0,
                     "direction", direction
             );
-            stockWebSocketHandler.sendToAll(objectMapper.writeValueAsString(message));
+            stockWebSocketHandler.sendToWatchers(symbol, objectMapper.writeValueAsString(message));
         } catch (Exception e) {
             log.error("Failed to send SURGE message for {}: {}", symbol, e.getMessage());
         }

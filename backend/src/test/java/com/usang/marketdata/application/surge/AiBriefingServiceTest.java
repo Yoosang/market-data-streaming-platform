@@ -66,7 +66,7 @@ class AiBriefingServiceTest {
 
         // then: fallback 메시지가 전송됨
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), captor.capture());
 
         String message = captor.getValue();
         assertThat(message).contains("\"type\":\"AI_BRIEFING\"");
@@ -86,7 +86,7 @@ class AiBriefingServiceTest {
         // then: POST가 2번 시도(1번 + 1번 retry)되었음 확인
         verify(restClient, times(2)).post();
         // fallback 메시지 전송
-        verify(stockWebSocketHandler).sendToAll(contains("일시적으로 제공할 수 없습니다"));
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), contains("일시적으로 제공할 수 없습니다"));
     }
 
     @Test
@@ -146,7 +146,7 @@ class AiBriefingServiceTest {
 
         // then: 메시지 포맷 검증
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), captor.capture());
 
         String message = captor.getValue();
         assertThat(message).contains("\"type\":\"AI_BRIEFING\"");
