@@ -25,6 +25,12 @@ app:
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN}
     chat-id: ${TELEGRAM_CHAT_ID}
+  # Ver7: pgvector 전용 Postgres — RAG 뉴스 코퍼스(news_article)만 여기 저장, 나머지는 기존 MySQL 그대로
+  postgres:
+    url: jdbc:postgresql://localhost:5433/vector_db
+    username: vector_user
+    password: vector_password
+    driver-class-name: org.postgresql.Driver
 
 spring:
   application:

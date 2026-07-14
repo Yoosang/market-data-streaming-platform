@@ -26,15 +26,4 @@ class OpenAiEmbeddingClientTest {
 
         assertThat(embedding).containsExactly(0.1f, -0.2f, 0.35f);
     }
-
-    @Test
-    @DisplayName("serialize/deserialize는 원본 벡터를 그대로 왕복 복원한다")
-    void 직렬화_역직렬화_왕복() {
-        float[] original = {0.123f, -0.456f, 0.789f};
-
-        String json = client.serialize(original);
-        float[] restored = client.deserialize(json);
-
-        assertThat(restored).containsExactly(original);
-    }
 }

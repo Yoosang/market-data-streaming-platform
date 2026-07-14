@@ -54,7 +54,7 @@ public class NewsCollectionScheduler {
             try {
                 float[] embedding = openAiEmbeddingClient.embed(item.title() + " " + item.description());
                 NewsArticle article = NewsArticle.of(symbol, companyName, item.title(), item.description(),
-                        item.link(), parsePublishedAt(item.pubDate()), openAiEmbeddingClient.serialize(embedding));
+                        item.link(), parsePublishedAt(item.pubDate()), embedding);
                 newsArticleRepository.save(article);
                 saved++;
             } catch (Exception e) {

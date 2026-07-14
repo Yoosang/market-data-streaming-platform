@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,14 +98,13 @@ class NewsCollectionSchedulerTest {
         when(newsArticleRepository.existsByUrl("https://new-article.com")).thenReturn(false);
         float[] embedding = {0.1f, 0.2f};
         when(openAiEmbeddingClient.embed("삼성전자 실적 서프라이즈 반도체 호황")).thenReturn(embedding);
-        when(openAiEmbeddingClient.serialize(embedding)).thenReturn("[0.1,0.2]");
 
         scheduler.collect();
 
         verify(newsArticleRepository).save(argThat(article ->
                 article.getSymbol().equals("005930")
                         && article.getUrl().equals("https://new-article.com")
-                        && article.getEmbedding().equals("[0.1,0.2]")
+                        && Arrays.equals(article.getEmbedding(), embedding)
         ));
     }
 
