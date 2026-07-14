@@ -50,48 +50,131 @@
 
 ---
 
-## Ver7 — 프로덕션 하드닝 (진행 중)
-- **배경**: Ver1~6까지 개발 속도 위주로 기능을 쌓아와서 품질 점검이 부족했다고 판단, 실제 AWS에
-  배포해 쓸 수 있는 수준으로 다듬기로 함. 백엔드 품질/테스트, 보안/설정, 배포 준비, 프론트+기능
-  인벤토리 4개 관점으로 전체 코드베이스를 감사한 뒤 아래 단계로 나눠 진행
+## Ver7 — 페이지 리팩토링 + 세션 보안 + RAG 벡터 DB화 ✅
+- **배경**: 애초 "프로덕션 하드닝"(Dockerfile, prod 설정, AWS 배포)으로 계획했으나, 착수 전
+  코드베이스를 감사하다 보니 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다 뭉쳐있어 UX/코드
+  구조 정리가 더 급하다고 판단해 범위를 바꿈. 프로덕션 하드닝/배포는 Ver8로 이동.
 
-- **즉시 버그 수정** ✅ (Ver7 태그와 별개로 먼저 처리한 실제 버그)
+- **즉시 버그 수정** ✅ (Ver7 착수 전 먼저 처리한 버그 3건)
   - IDOR: `PriceAlertController.deleteAlert`에 소유권 체크가 없어 누구나 남의 알림을 삭제 가능하던 문제
   - WebSocket이 `ALERT` 메시지(다른 사용자의 목표가 포함)를 인증 없이 전체 브로드캐스트하던 문제
-    → `JwtHandshakeInterceptor`로 연결 시 토큰을 검증해 세션에 userId 부여,
-      `StockWebSocketHandler.sendToUser`로 본인에게만 전송 (공개 데이터는 기존 브로드캐스트 유지)
+    → `JwtHandshakeInterceptor` + `sendToUser`로 수정. 이후 Step1에서 가격 알림 자체가 텔레그램
+    전용으로 바뀌며 이 경로는 통째로 제거됐다가, Step 마지막에 다른 목적(시세/급등/AI브리핑
+    필터링)으로 같은 메커니즘이 다시 도입됨 — 아래 "그 외" 참고
   - `symbol` 값이 검증 없이 외부 API URL에 그대로 삽입되던 인젝션 여지 → 관심종목/알림 등록
     시점에 형식 검증 추가
   - KIS 접근토큰(`KisAccessTokenProvider`)과 approval key(`KisApprovalKeyProvider`)가
     앱을 재기동할 때마다 재발급되던 문제 → 로컬 파일에 캐싱해 재기동 간 재사용 (개발 중 반복
     재시작으로 KIS 발급 API를 과호출해 계정 제한 경고를 받은 것이 계기)
 
-- **Ver7-1: 배포 최소요건** (진행 중) — "AWS에 실제로 띄울 수 있는 최소 상태" 목표, 스케일링
-  대응은 제외
-  - Dockerfile (backend/frontend)
-  - 프론트 하드코딩된 `localhost:8080` API/WS URL을 환경변수로 전환
-  - 백엔드 `application-prod.yaml` 분리, Flyway 도입, CORS/WS origin 환경변수화
-  - Actuator 헬스체크가 인증 없이 동작하도록 `/actuator/health` 예외 처리
-  - `RestClient` 타임아웃 설정, `@Async` 전용 스레드풀 적용
-  - `spring-boot-starter-validation` 실제 활성화 + 전역 예외 처리
+- **Step1: 페이지 분리 + 텔레그램 알림** ✅
+  - `/watchlist`(목록)와 `/watchlist/register`(등록) 페이지 분리, Apple 디자인 시스템
+    (`DESIGN-apple.md`) 적용
+  - 알림 설정 버튼을 등록 페이지에서 목록 페이지로 이동
+  - 가격 알림을 텔레그램 전용으로 전환 — 기존 브라우저 Notification/WebSocket `ALERT` 경로 완전 제거
+  - KR 알림 메시지는 종목코드 대신 종목명 표시, 소수점 제거, 모든 금액 표기에 콤마 포맷 적용
 
-- **Ver7-2: 기능 감사** (예정) — Finnhub(미장 시간대 제한)/KIS(개인 계정 키)/AI 브리핑(비용,
-  관심종목당 무제한 트리거 가능)/RAG(Ver6, 스스로 "학습용 브루트포스"라 명시) 등 구조적 제약이
-  있는 기능을 유지·데모모드·제거 중 무엇으로 할지 제품 관점에서 결정. 관심종목/알림 개수
-  제한(비용 리스크 방지)도 함께 처리
+- **Step2: 종목 상세 페이지** ✅
+  - `/watchlist/[symbol]` 신설 — 차트 + 관련 뉴스 목록 + 온디맨드 AI 분석
+  - `NewsController`(`GET /api/news/{symbol}`), `AiBriefingController`(`POST /api/ai-briefing/{symbol}`) 신설
+  - Finnhub 뉴스 조회 로직을 `AiBriefingService`에서 `FinnhubNewsClient`로 분리해 `NewsController`와 공용화
 
-- **Ver7-3: 스케일링 대응** (예정) — 현재 모든 상태(최신가 캐시, 급등 감지 기준가/쿨다운, 캔들
-  집계, WebSocket 세션)가 JVM 로컬 메모리라 다중 인스턴스로 확장 불가. Redis 캐시/pub-sub 도입,
-  `@Scheduled` 작업 분산 락 등 — 실제 다중 인스턴스 배포 계획이 생기면 진행
+- **Step3: 세션 보안 + pgvector + 차트 버그** ✅
+  - JWT 세션 만료 24시간 → 30분
+  - `useAuthGuard` 훅 신설 — 미인증 시 즉시 리다이렉트, JWT `exp` 디코딩해 만료 시점에 자동 로그아웃
+  - RAG 뉴스 코퍼스(`news_article`)를 MySQL 브루트포스 코사인 계산에서 pgvector(Postgres)로
+    마이그레이션 — 유사도 검색을 `<=>` 연산자로 DB에서 직접 수행, `NewsArticle`은 JPA 엔티티에서
+    JdbcTemplate 기반 POJO로 전환
+  - `CandleAggregator` 타임존 버그(서버 로컬 타임존을 UTC로 잘못 해석하던 문제) 및 flush
+    레이스컨디션(forEach 중 들어온 틱 유실 가능성 → 원자적 맵 교체로 수정) 해결
 
-- **Ver7-4: 실제 AWS 배포** (예정) — ECS/App Runner/EC2 중 선택, RDS 전환, Secrets Manager
-  연동, CI/CD 파이프라인
+- **Step4: Kafka/Redis 필요성 분석** ✅ — 실제 구현 없이 문서화만. 다중 인스턴스 배포 시 실제로
+  깨지는 지점과 필요한 기술 매핑, 아래 "미래 검토(확장성)" 섹션 참고
+
+- **그 외** ✅
+  - 가격 알림 트리거 시 즉시 삭제로 단순화 (`triggered` 필드/이력 제거, 10초 폴링과 맞물려 이력을
+    남길 필요가 없다고 판단)
+  - WebSocket 시세/급등/AI브리핑을 관심종목 소유자에게만 전송하도록 필터링 —
+    `JwtHandshakeInterceptor`를 재도입해 세션에 userId 부여, `StockWebSocketHandler.sendToWatchers`로
+    관심종목 소유자에게만 전송 (기존엔 전체 세션에 브로드캐스트해 다른 사용자 관심종목 정보가
+    새고 있었음 — 위 ALERT 유출 버그와 동일한 구조)
+  - 미사용 코드 정리 (프론트 export/prop, 백엔드 dead code 스윕)
+
+- **Ver8으로 이동한 범위** (예정) — 애초 Ver7로 계획했던 프로덕션 하드닝/배포
+  - 배포 최소요건: Dockerfile, 프론트 API/WS URL 환경변수화, `application-prod.yaml` 분리,
+    Flyway 도입, Actuator 헬스체크 인증 예외, `RestClient` 타임아웃, `@Async` 전용 스레드풀,
+    `spring-boot-starter-validation` 활성화
+  - 기능 감사: Finnhub/KIS/AI브리핑/RAG의 구조적 제약(비용, 사용량 제한 등)을 유지·데모모드·제거
+    중 무엇으로 할지 결정, 관심종목/알림 개수 제한
+  - 스케일링 대응: 실제 다중 인스턴스 배포 계획이 생기면 Kafka/Redis 도입 (필요성 분석은 Step4로 완료)
+  - 실제 AWS 배포: ECS/App Runner/EC2 중 선택, RDS 전환, Secrets Manager 연동, CI/CD 파이프라인
 
 ---
 
-## 미래 검토 (확장성)
-- Kafka 도입: 여러 Spring Boot 인스턴스가 시세 공유 (docker-compose 멀티 인스턴스 검증)
-- Redis 도입: 최근 시세 및 캔들 캐싱으로 DB 부하 감소
+## 미래 검토 (확장성): Kafka/Redis 필요성 분석
+
+**결론**: 지금(단일 인스턴스)은 필요 없음. 아래 문제는 전부 "여러 인스턴스가 동시에 떠 있는"
+시나리오에서만 발생한다. 실제 다중 인스턴스 배포 계획이 생기는 시점(Ver8 스케일링 단계)에 도입.
+
+### 다중 인스턴스로 확장하면 실제로 깨지는 것들
+
+1. **캔들 저장이 깨짐 (가장 심각)** — `CandleAggregator`
+   각 인스턴스는 자신이 받은 틱만으로 캔들을 부분적으로 만든다. N개 인스턴스가 동시에
+   `flushOneMin`/`flushFiveMin`/`flushDaily`를 실행하면 같은 `(symbol, interval_type, open_time)`에
+   대해 서로 다른(불완전한) OHLCV를 각각 저장하려 시도 — unique 제약 위반 에러가 나거나 조용히
+   틀린 데이터가 남는다.
+   → **Kafka**로 틱 수집을 한 곳(컨슈머 그룹)에 모아 캔들 집계를 인스턴스 하나가 전담해야 함.
+   Redis만으로는 안 풀림 — 틱 자체가 인스턴스마다 분산돼 있어 "부분 데이터" 문제가 그대로 남음.
+
+2. **가격 알림 중복 발송** — `PriceAlertChecker`
+   N개 인스턴스가 10초마다 동시에 같은 알림 row를 읽고 조건 충족을 판단한다. 삭제 커밋 전에
+   서로 겹치면 텔레그램이 중복 발송될 수 있다.
+   → **Redis 분산 락**(또는 DB `SELECT ... FOR UPDATE`)으로 인스턴스 하나만 처리하게 함.
+
+3. **뉴스 수집/임베딩 비용 중복** — `NewsCollectionScheduler`
+   N개 인스턴스가 30분마다 각각 네이버 뉴스 API(일 2.5만 건 쿼터를 공유 소진)와 OpenAI 임베딩
+   (실제 과금)을 중복 호출한다. `existsByUrl` 체크도 저장 커밋 전 레이스가 있어 중복 임베딩
+   비용이 발생할 수 있다.
+   → **Redis 분산 락**으로 스케줄러를 인스턴스 하나만 실행.
+
+4. **KIS 토큰 재발급 경합** — `KisAccessTokenProvider`
+   KIS 토큰 발급 API는 분당 1회 제한이 걸려있다. N개 인스턴스가 거의 동시에 갱신을 시도하면
+   제한에 걸려 계정 경고를 받을 수 있다. 로컬 파일 캐시도 인스턴스마다 따로라 공유되지 않는다.
+   → **Redis**에 토큰 값 자체를 공유 저장하고 갱신 시 분산 락 사용.
+
+5. **급등 감지 중복 발화 + AI 브리핑 중복 과금** — `SurgeDetector`
+   `baselinePrices`/`cooldownUntil`이 인스턴스별 로컬 메모리라, 한 인스턴스의 쿨다운이 끝난
+   시점에 다른 인스턴스가 이미 같은 종목으로 발화했어도 알 방법이 없어 또 발화한다 — 사용자에게
+   중복 알림이 가고, Claude API도 중복 호출(실비용)된다.
+   → **Redis**에 기준가/쿨다운을 공유 캐시로 저장(쿨다운은 `SETNX`+TTL로 구현).
+
+6. **KIS/Finnhub 업스트림 연결 자체가 N배로 중복 — 근본 원인**
+   `KisClientConfig`/`FinnhubClientConfig`가 인스턴스마다 독립적으로 업스트림에 접속해서 완전히
+   동일한 시세를 N번 중복 수신한다. 1번과 5번 문제의 근본 원인이기도 하다.
+   → **Kafka**: 업스트림 연결을 전담하는 별도 ingest 서비스를 하나만 두고, 나머지 인스턴스는
+   Kafka에서 틱을 구독하는 구조로 바꾸면 근본적으로 해결됨.
+
+### 예상과 달리 실제로는 문제 없는 부분
+
+**프론트로 보내는 WebSocket 브로드캐스트 자체는 인스턴스 간 전파가 필요 없다.** 각 인스턴스가
+(6번 문제 때문에) 이미 독립적으로 전체 시세를 다 받고 있어서, 자기한테 붙은 브라우저 세션에는
+자기가 알아서 다 만들어 보낼 수 있다. "인스턴스 A에서 만든 메시지가 인스턴스 B에 붙은 세션까지
+못 감"이라는 흔한 멀티 인스턴스 문제가 이 앱 구조에서는 실제로 발생하지 않는다 — 대신 진짜
+문제는 "업스트림 연결과 계산 자체가 N배로 낭비된다"는 쪽이다. (Redis pub/sub로 WS를 팬아웃하는
+건 6번을 Kafka로 먼저 풀고 나서, 그 ingest 서비스에서 각 인스턴스로 틱을 릴레이할 때나 필요해짐)
+
+### 이미 준비된 스캐폴딩
+- `build.gradle:27-28`(runtime), `:38-39`(test) — `spring-boot-starter-data-redis`/`kafka` 의존성은
+  이미 있음, 미사용
+- `application.yaml:46-49` — `spring.autoconfigure.exclude`로 Redis/Kafka 자동설정 비활성화 중
+- `application.yaml:68-78` — `spring.kafka` 설정("Ver4에서 활성화" 표시), `:80-84` —
+  `spring.data.redis` 설정("Ver3에서 활성화" 표시)이 주석으로 이미 준비돼 있음
+- `docker-compose.yml:6-14`(redis), `:15-33`(kafka) — 서비스 정의는 이미 있음, 앱에서 아직 안 씀
+
+### 결론
+다중 인스턴스 배포 계획이 실제로 생기면 위 순서(Kafka로 업스트림 일원화 → 나머지는 Redis 분산
+락/캐시)로 도입. 지금은 인스턴스가 1개라 위 문제들이 전혀 발생하지 않으므로, "필요하지 않은 걸
+미리 만들지 않는다"는 프로젝트 원칙에 따라 구현하지 않는다.
 
 ---
 

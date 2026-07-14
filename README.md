@@ -7,10 +7,13 @@
 
 ---
 
-## 현재 버전: Ver7 (진행 중)
+## 현재 버전: Ver7 ✅ (완료) — 다음 버전(Ver8) 계획 미정
 
-Ver1~6까지 개발 속도 위주로 기능을 쌓아온 뒤, 실제 AWS에 배포해 쓸 수 있는 수준으로 다듬는
-프로덕션 하드닝 단계입니다. 자세한 진행 상황은 [ROADMAP.md](./ROADMAP.md)의 Ver7 항목을 참고하세요.
+애초 "프로덕션 하드닝(배포)"으로 계획했으나, 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다
+뭉쳐있어 UX/코드 구조 정리가 더 급하다고 판단해 범위를 바꿔 진행했습니다. 페이지 분리, 텔레그램
+알림 전환, 세션 보안 강화, RAG의 pgvector 마이그레이션, 차트 버그 수정 등을 다뤘고, 애초 계획했던
+배포 준비는 Ver8로 넘어갔습니다. 자세한 진행 상황은 [ROADMAP.md](./ROADMAP.md)의 Ver7 항목을
+참고하세요.
 
 ### 버전별 학습 목표 요약
 
@@ -22,7 +25,7 @@ Ver1~6까지 개발 속도 위주로 기능을 쌓아온 뒤, 실제 AWS에 배�
 | Ver4 | 인증 (JWT) | Spring Security + JWT 로그인 |
 | Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
 | Ver6 | RAG (검색 증강 생성) | 뉴스 임베딩 + 벡터 유사도 검색으로 KR 브리핑 개선 |
-| Ver7 | 프로덕션 하드닝 | 보안 버그 수정 + AWS 배포 최소 요건 (진행 중) |
+| Ver7 | 벡터 DB (pgvector), 세션 보안 | 페이지 리팩토링, 텔레그램 알림, RAG를 pgvector로 마이그레이션, JWT 세션 30분 |
 
 ---
 
@@ -36,11 +39,12 @@ Ver1~6까지 개발 속도 위주로 기능을 쌓아온 뒤, 실제 AWS에 배�
 | DB | MySQL + Spring Data JPA | Ver2 |
 | Chart | TradingView Lightweight Charts | Ver2 |
 | 실시간 시세 (KR) | 한국투자증권 WebSocket API | Ver3 |
-| 가격 알림 | 브라우저 Notification API | Ver3 |
+| 가격 알림 | 텔레그램 봇 API (Ver3에서 브라우저 Notification으로 시작, Ver7에서 텔레그램 전용으로 전환) | Ver3 |
 | 인증 | Spring Security + JWT (jjwt) | Ver4 |
 | AI 브리핑 | Claude API (claude-haiku) | Ver5 |
 | KR 뉴스 수집 | 네이버 뉴스 검색 API | Ver6 |
 | 임베딩 / RAG | OpenAI Embeddings (text-embedding-3-small) | Ver6 |
+| 벡터 DB | pgvector (Postgres) — RAG 뉴스 코퍼스 전용, 나머지는 MySQL 유지 | Ver7 |
 
 ---
 
@@ -137,9 +141,9 @@ marketdata/
 │   │   └── api/                  # REST Controller, WebSocket Handler
 │   └── build.gradle
 ├── frontend/
-│   ├── app/                      # Next.js 페이지 (메인, 로그인)
-│   ├── components/               # CandleChart, AlertForm, KrStockSearchInput
-│   ├── hooks/                    # useStockWebSocket, useWatchlist, useAlerts
+│   ├── app/                      # Next.js 페이지 (로그인, /watchlist 목록·등록·상세)
+│   ├── components/               # CandleChart, AlertForm, KrStockSearchInput, SurgeBriefingPanel
+│   ├── hooks/                    # useStockWebSocket, useWatchlist, useAlerts, useAuthGuard
 │   └── lib/                      # auth (JWT), format
 └── docker-compose.yml
 ```
@@ -154,28 +158,36 @@ marketdata/
 [국내 시세]  KIS WebSocket ──→ StockBroadcastService (@Async)
                                       ├─→ CandleAggregator (1분/5분/일봉)
                                       ├─→ LatestPriceStore (메모리 캐시)
-                                      ├─→ StockWebSocketHandler ──→ 브라우저
+                                      ├─→ StockWebSocketHandler.sendToWatchers ──→ 관심종목 소유자 브라우저만
                                       └─→ SurgeDetector
-                                               ├─→ SURGE 메시지 즉시 전송
+                                               ├─→ SURGE 메시지 (관심종목 소유자에게만)
                                                └─→ AiBriefingService (@Async)
                                                        ├─→ US: Finnhub 뉴스 조회
-                                                       ├─→ KR: NewsRetrievalService 유사도 검색 (RAG)
+                                                       ├─→ KR: NewsRetrievalService 유사도 검색 (RAG, pgvector)
                                                        ├─→ Claude API 호출
-                                                       └─→ AI_BRIEFING 메시지 전송
+                                                       └─→ AI_BRIEFING 메시지 (관심종목 소유자에게만)
 
-[Ver6 RAG 배치 파이프라인] (관심종목 KR 뉴스, 30분 주기)
+[Ver6 RAG 배치 파이프라인, Ver7에서 pgvector로 마이그레이션] (관심종목 KR 뉴스, 30분 주기)
 NewsCollectionScheduler (@Scheduled)
         └─→ NaverNewsClient (뉴스 검색) ──→ OpenAiEmbeddingClient (임베딩)
-                                                    └─→ NewsArticle 저장 (MySQL, 벡터는 JSON 직렬화)
+                                                    └─→ NewsArticle 저장 (pgvector/Postgres, vector 타입)
                                                               ↑
-                                     NewsRetrievalService가 코사인 유사도로 조회 (급등 감지 시)
+                          NewsRetrievalService가 pgvector `<=>` 코사인 거리 연산자로 DB에서 직접 조회
 ```
 
-- 가격 알림: `PriceAlertChecker` (@Scheduled, 10초마다) → `LatestPriceStore` 조회 → 조건 충족 시 브라우저 알림 전송
+- 가격 알림: `PriceAlertChecker` (@Scheduled, 10초마다) → `LatestPriceStore` 조회 → 조건 충족 시
+  텔레그램 발송 후 알림 즉시 삭제(이력 보관 안 함)
 - 인증: JWT 토큰을 `Authorization: Bearer` 헤더로 전달, `JwtAuthenticationFilter`에서 검증
-- AI 브리핑: 전일 종가 대비 5% 변동 감지 → SURGE 즉시 전송 → Claude API 비동기 호출 → AI_BRIEFING 후속 전송
-- RAG: 관심종목(KR) 뉴스를 미리 수집·임베딩해 MySQL에 저장해두고, 급등 감지 시 종목명 기반 쿼리로 코사인 유사도가 가장 높은 기사를 검색해 Claude 프롬프트에 주입 (벡터 DB 없이 애플리케이션 레벨 브루트포스 계산)
-- WebSocket 인증(Ver7): 연결 시 쿼리파라미터로 받은 JWT를 `JwtHandshakeInterceptor`가 검증해 세션에 userId 부여 (토큰 없어도 연결은 허용). 개인 알림(`ALERT`)은 `sendToUser`로 본인 세션에만 전송, 시세/SURGE/AI_BRIEFING 등 공개 데이터는 기존처럼 전체 브로드캐스트
+  (세션 만료 30분, 프론트 `useAuthGuard`가 만료 시점에 자동 로그아웃)
+- AI 브리핑: 전일 종가 대비 5% 변동 감지 → SURGE 전송 → Claude API 비동기 호출 → AI_BRIEFING 후속 전송.
+  상세 페이지에서 온디맨드로도 요청 가능(`POST /api/ai-briefing/{symbol}`)
+- RAG: 관심종목(KR) 뉴스를 미리 수집·임베딩해 pgvector(Postgres)에 저장해두고, 급등 감지 시
+  종목명 기반 쿼리를 임베딩해 `<=>` 코사인 거리 연산자로 DB에서 직접 유사도 검색 (Ver6의
+  애플리케이션 레벨 브루트포스 계산에서 Ver7에 실제 벡터 DB로 전환)
+- WebSocket 인증/필터링(Ver7): 연결 시 쿼리파라미터로 받은 JWT를 `JwtHandshakeInterceptor`가
+  검증해 세션에 userId 부여(토큰 없어도 연결은 허용, 단 아무 메시지도 받지 못함).
+  `StockWebSocketHandler.sendToWatchers`가 시세/SURGE/AI_BRIEFING 모두 해당 종목을 관심종목에
+  등록한 사용자에게만 전송 (가격 알림은 Ver7에서 텔레그램 전용으로 바뀌어 WS를 타지 않음)
 
 ---
 
@@ -224,17 +236,27 @@ NewsCollectionScheduler (@Scheduled)
 - `NewsRetrievalService`: 급등/급락 감지 시 "{종목명} 주가 급등/급락 이유" 쿼리를 임베딩해 저장된 코퍼스와 코사인 유사도 계산 → 상위 3개 기사를 Claude 프롬프트에 주입
 - `AiBriefingService`의 KR 분기를 RAG 검색으로 교체 (US 분기의 Finnhub 뉴스 조회는 그대로 유지)
 
-### Ver7 — 프로덕션 하드닝 (진행 중)
-- 전체 코드베이스 감사(백엔드 품질/테스트, 보안/설정, 배포 준비, 프론트+기능) 후 발견한 문제를
-  우선순위화해 단계별로 진행 — 자세한 계획은 [ROADMAP.md](./ROADMAP.md) 참고
-- 즉시 수정한 버그:
-  - IDOR — 알림 삭제에 소유권 체크 없이 누구나 남의 알림 삭제 가능하던 문제
-  - WebSocket이 `ALERT`(다른 사용자 목표가 포함)를 인증 없이 전체 브로드캐스트하던 문제 →
-    핸드셰이크 시 JWT 검증 후 본인에게만 전송하도록 수정
-  - `symbol`이 검증 없이 외부 API URL에 삽입되던 인젝션 여지 → 입력 경계에 형식 검증 추가
-  - KIS 접근토큰/approval key가 앱 재기동마다 재발급되어 KIS 측 계정 제한 경고를 받은 문제 →
-    파일 캐싱으로 재기동 간 재사용
-- Ver7-1(배포 최소요건: Dockerfile, 환경변수화, prod 설정 분리, 헬스체크 등) 진행 중
+### Ver7 — 페이지 리팩토링 + 세션 보안 + RAG 벡터 DB화
+- 애초 "프로덕션 하드닝(배포)"으로 계획했으나, 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다
+  뭉쳐있어 UX/코드 구조 정리가 더 급하다고 판단해 범위를 바꿔 진행 — 배포 준비는 Ver8로 이동,
+  자세한 내용은 [ROADMAP.md](./ROADMAP.md) 참고
+- 착수 전 먼저 고친 버그: IDOR(알림 삭제 소유권 체크 누락), WebSocket `ALERT` 전체 브로드캐스트
+  유출(이후 텔레그램 전환으로 이 경로 자체가 제거됨), `symbol` 입력 검증 누락, KIS 토큰 재기동마다
+  재발급되던 문제(파일 캐싱)
+- 관심종목 `/watchlist`(목록)·`/watchlist/register`(등록)·`/watchlist/[symbol]`(상세, 차트+뉴스+
+  온디맨드 AI분석) 3개 페이지로 분리, Apple 디자인 시스템 적용
+- 가격 알림을 텔레그램 전용으로 전환 (브라우저 Notification/WebSocket `ALERT` 완전 제거),
+  트리거 시 이력 없이 즉시 삭제하도록 단순화
+- JWT 세션 만료 24시간 → 30분, 프론트 `useAuthGuard` 훅으로 만료 시점 자동 로그아웃
+- RAG 뉴스 코퍼스를 MySQL 브루트포스 코사인 계산에서 **pgvector(Postgres)**로 마이그레이션 —
+  `<=>` 코사인 거리 연산자로 DB에서 직접 유사도 검색, `NewsArticle`을 JPA 엔티티에서 JdbcTemplate
+  기반 POJO로 전환
+- `CandleAggregator` 타임존 버그(서버 로컬 타임존 vs UTC 해석 불일치) 및 flush 레이스컨디션
+  (원자적 맵 교체로 수정)
+- WebSocket 시세/급등/AI브리핑을 관심종목 소유자에게만 전송하도록 `JwtHandshakeInterceptor` +
+  `sendToWatchers`로 필터링 (기존엔 전체 세션에 브로드캐스트해 다른 사용자 관심종목 정보가
+  새고 있었음)
+- Kafka/Redis 필요성 분석 문서화 (구현 없이 [ROADMAP.md](./ROADMAP.md)에 근거 기반 분석만 정리)
 
 ---
 
