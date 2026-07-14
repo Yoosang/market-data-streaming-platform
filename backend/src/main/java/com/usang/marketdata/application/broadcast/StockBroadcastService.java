@@ -31,7 +31,7 @@ public class StockBroadcastService {
 
         try {
             String json = objectMapper.writeValueAsString(trade);
-            stockWebSocketHandler.sendToAll(json);
+            stockWebSocketHandler.sendToWatchers(trade.symbol(), json);
         } catch (Exception e) {
             log.error("Failed to serialize trade: {}", e.getMessage());
         }

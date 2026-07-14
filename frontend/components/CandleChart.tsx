@@ -47,12 +47,12 @@ export default function CandleChart({ symbol }: Props) {
     const chart = createChart(containerRef.current, {
       autoSize: true,
       layout: {
-        background: { color: "#111827" },
-        textColor: "#9ca3af",
+        background: { color: "#272729" },
+        textColor: "#cccccc",
       },
       grid: {
-        vertLines: { color: "#1f2937" },
-        horzLines: { color: "#1f2937" },
+        vertLines: { color: "#2a2a2c" },
+        horzLines: { color: "#2a2a2c" },
       },
       timeScale: {
         timeVisible: true,
@@ -90,7 +90,7 @@ export default function CandleChart({ symbol }: Props) {
   return (
     <div className="w-full max-w-sm mt-4">
       <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-body-muted">
           {symbol} · {INTERVAL_LABELS[interval]}
         </p>
         <div className="flex gap-1">
@@ -98,10 +98,10 @@ export default function CandleChart({ symbol }: Props) {
             <button
               key={iv}
               onClick={() => setInterval(iv)}
-              className={`text-xs px-2 py-0.5 rounded ${
+              className={`text-xs px-2.5 py-1 rounded-pill transition-colors ${
                 interval === iv
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:text-white"
+                  ? "bg-primary text-body-on-dark"
+                  : "text-body-muted hover:text-body-on-dark"
               }`}
             >
               {INTERVAL_LABELS[iv]}
@@ -109,7 +109,7 @@ export default function CandleChart({ symbol }: Props) {
           ))}
         </div>
       </div>
-      <div ref={containerRef} className="w-full h-64 rounded-xl overflow-hidden" />
+      <div ref={containerRef} className="w-full h-64 rounded-lg overflow-hidden" />
     </div>
   );
 }

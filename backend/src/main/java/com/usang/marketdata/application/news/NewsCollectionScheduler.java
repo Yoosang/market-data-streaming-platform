@@ -37,25 +37,24 @@ public class NewsCollectionScheduler {
                 // 같은 종목을 여러 사용자가 담아도 종목당 한 번만 수집
                 .collect(Collectors.toMap(Watchlist::getSymbol, Watchlist::getName, (a, b) -> a));
 
-        int saved = 0;
-        for (Map.Entry<String, String> entry : symbolToName.entrySet()) {
-            saved += collectForSymbol(entry.getKey(), entry.getValue());
-        }
+        int saved = symbolToName.entrySet().stream()
+                .mapToInt(entry -> collectForSymbol(entry.getKey(), entry.getValue()))
+                .sum();
         log.info("News collection finished: {} symbol(s) scanned, {} new article(s) saved",
                 symbolToName.size(), saved);
     }
 
-    private int collectForSymbol(String symbol, String companyName) {
+    // 상세 페이지의 "뉴스 새로고침"에서 특정 종목만 즉시 수집할 때도 재사용
+    public int collectForSymbol(String symbol, String companyName) {
         List<NaverNewsItem> items = naverNewsClient.search(companyName);
         int saved = 0;
         for (NaverNewsItem item : items) {
             if (newsArticleRepository.existsByUrl(item.link())) continue;
 
             try {
-                NewsArticle article = NewsArticle.of(symbol, companyName, item.title(),
-                        item.description(), item.link(), parsePublishedAt(item.pubDate()));
                 float[] embedding = openAiEmbeddingClient.embed(item.title() + " " + item.description());
-                article.applyEmbedding(openAiEmbeddingClient.serialize(embedding));
+                NewsArticle article = NewsArticle.of(symbol, companyName, item.title(), item.description(),
+                        item.link(), parsePublishedAt(item.pubDate()), embedding);
                 newsArticleRepository.save(article);
                 saved++;
             } catch (Exception e) {

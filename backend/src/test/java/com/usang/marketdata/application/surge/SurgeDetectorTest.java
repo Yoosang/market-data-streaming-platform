@@ -71,7 +71,7 @@ class SurgeDetectorTest {
 
         // then: SURGE 메시지 전송
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("AAPL"), captor.capture());
 
         String message = captor.getValue();
         assertThat(message).contains("\"type\":\"SURGE\"");
@@ -92,7 +92,7 @@ class SurgeDetectorTest {
         surgeDetector.onTrade(new Trade("TSLA", 94.0, 100, System.currentTimeMillis()));
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("TSLA"), captor.capture());
 
         assertThat(captor.getValue()).contains("\"direction\":\"DOWN\"");
         verify(aiBriefingService).generateAsync(eq("TSLA"), anyDouble(), eq("DOWN"));
@@ -117,7 +117,7 @@ class SurgeDetectorTest {
 
         surgeDetector.onTrade(new Trade("AAPL", 105.0, 100, System.currentTimeMillis()));
 
-        verify(stockWebSocketHandler).sendToAll(anyString());
+        verify(stockWebSocketHandler).sendToWatchers(eq("AAPL"), anyString());
     }
 
     @Test
@@ -131,8 +131,8 @@ class SurgeDetectorTest {
         // 쿨다운 중 추가 급등
         surgeDetector.onTrade(new Trade("AAPL", 115.0, 100, System.currentTimeMillis()));
 
-        // sendToAll은 딱 1번만 호출됨 (쿨다운이 두 번째를 차단)
-        verify(stockWebSocketHandler, times(1)).sendToAll(anyString());
+        // sendToWatchers는 딱 1번만 호출됨 (쿨다운이 두 번째를 차단)
+        verify(stockWebSocketHandler, times(1)).sendToWatchers(eq("AAPL"), anyString());
     }
 
     @Test
@@ -145,7 +145,7 @@ class SurgeDetectorTest {
         surgeDetector.onTrade(new Trade("TSLA", 211.0, 100, System.currentTimeMillis()));
 
         // 각 종목마다 독립적으로 SURGE 발화
-        verify(stockWebSocketHandler, times(2)).sendToAll(anyString());
+        verify(stockWebSocketHandler, times(2)).sendToWatchers(anyString(), anyString());
     }
 
     @Test
@@ -157,7 +157,7 @@ class SurgeDetectorTest {
         // 기준가(첫 틱 100) 대비 5.1% 상승
         surgeDetector.onTrade(new Trade("AAPL", 105.1, 100, System.currentTimeMillis()));
 
-        verify(stockWebSocketHandler).sendToAll(anyString());
+        verify(stockWebSocketHandler).sendToWatchers(eq("AAPL"), anyString());
     }
 
     @Test

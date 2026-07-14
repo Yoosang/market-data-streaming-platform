@@ -1,7 +1,7 @@
 jwt:
   # HS256 서명에 사용할 비밀키 — 반드시 32자 이상의 랜덤 문자열로 설정
   secret: ${JWT_SECRET}
-  expiration-ms: 86400000  # 24시간
+  expiration-ms: 1800000  # 30분
 
 app:
   finnhub:
@@ -22,6 +22,15 @@ app:
   openai:
     api-key: ${OPENAI_API_KEY}
     embedding-model: text-embedding-3-small
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN}
+    chat-id: ${TELEGRAM_CHAT_ID}
+  # Ver7: pgvector 전용 Postgres — RAG 뉴스 코퍼스(news_article)만 여기 저장, 나머지는 기존 MySQL 그대로
+  postgres:
+    url: jdbc:postgresql://localhost:5433/vector_db
+    username: vector_user
+    password: vector_password
+    driver-class-name: org.postgresql.Driver
 
 spring:
   application:
@@ -53,7 +62,8 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
-    show-sql: true
+    # 스케줄러(알림 체커 등)가 반복 실행될 때마다 SQL이 로그를 뒤덮어서 끔 — 필요하면 로컬에서 잠깐 true로
+    show-sql: false
 
   # ── Ver4에서 활성화 ──
   # kafka:
@@ -76,7 +86,6 @@ spring:
 logging:
   level:
     com.usang.marketdata.infra.kis: DEBUG
-    com.usang.marketdata.application.alert: DEBUG
     com.usang.marketdata.api.stock: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

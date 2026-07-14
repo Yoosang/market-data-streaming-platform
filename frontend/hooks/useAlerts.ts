@@ -3,12 +3,11 @@ import { authHeaders, getToken } from "@/lib/auth";
 
 const API_BASE = "http://localhost:8080";
 
-export interface Alert {
+interface Alert {
   id: number;
   symbol: string;
   targetPrice: number;
   direction: "ABOVE" | "BELOW";
-  triggered: boolean;
 }
 
 export function useAlerts(symbol: string) {
@@ -17,12 +16,17 @@ export function useAlerts(symbol: string) {
   useEffect(() => {
     if (!symbol || !getToken()) return;
 
-    fetch(`${API_BASE}/api/alerts`, { headers: authHeaders() })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: Alert[]) =>
-        setAlerts(data.filter((a) => a.symbol === symbol && !a.triggered))
-      )
-      .catch(console.error);
+    const fetchAlerts = () => {
+      fetch(`${API_BASE}/api/alerts`, { headers: authHeaders() })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: Alert[]) => setAlerts(data.filter((a) => a.symbol === symbol)))
+        .catch(console.error);
+    };
+
+    fetchAlerts();
+    // 백엔드 알림 체커(10초 주기)와 맞춰 폴링 — 알림이 발송되면(즉시 삭제됨) 목록에서 자동으로 사라짐
+    const timer = setInterval(fetchAlerts, 10000);
+    return () => clearInterval(timer);
   }, [symbol]);
 
   const addAlert = async (targetPrice: number, direction: "ABOVE" | "BELOW") => {
@@ -43,9 +47,5 @@ export function useAlerts(symbol: string) {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const markTriggered = (alertSymbol: string) => {
-    setAlerts((prev) => prev.filter((a) => a.symbol !== alertSymbol));
-  };
-
-  return { alerts, addAlert, removeAlert, markTriggered };
+  return { alerts, addAlert, removeAlert };
 }

@@ -3,8 +3,8 @@ package com.usang.marketdata.application.surge;
 import com.usang.marketdata.api.stock.StockWebSocketHandler;
 import com.usang.marketdata.application.news.NewsRetrievalService;
 import com.usang.marketdata.domain.news.NewsArticle;
-import com.usang.marketdata.domain.watchlist.Watchlist;
-import com.usang.marketdata.domain.watchlist.WatchlistRepository;
+import com.usang.marketdata.domain.news.NewsArticleRepository;
+import com.usang.marketdata.infra.finnhub.FinnhubNewsClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,10 @@ class AiBriefingServiceTest {
     private NewsRetrievalService newsRetrievalService;
 
     @Mock
-    private WatchlistRepository watchlistRepository;
+    private NewsArticleRepository newsArticleRepository;
+
+    @Mock
+    private FinnhubNewsClient finnhubNewsClient;
 
     private AiBriefingService aiBriefingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -45,11 +48,10 @@ class AiBriefingServiceTest {
     @BeforeEach
     void setUp() {
         aiBriefingService = new AiBriefingService(stockWebSocketHandler, objectMapper, restClient,
-                newsRetrievalService, watchlistRepository);
+                newsRetrievalService, newsArticleRepository, finnhubNewsClient);
         // @Value 필드는 Spring 컨텍스트 없이는 주입되지 않아 ReflectionTestUtils로 설정
         ReflectionTestUtils.setField(aiBriefingService, "anthropicApiKey", "test-api-key");
         ReflectionTestUtils.setField(aiBriefingService, "model", "claude-test");
-        ReflectionTestUtils.setField(aiBriefingService, "finnhubToken", "test-token");
     }
 
     @Test
@@ -64,7 +66,7 @@ class AiBriefingServiceTest {
 
         // then: fallback 메시지가 전송됨
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), captor.capture());
 
         String message = captor.getValue();
         assertThat(message).contains("\"type\":\"AI_BRIEFING\"");
@@ -84,7 +86,7 @@ class AiBriefingServiceTest {
         // then: POST가 2번 시도(1번 + 1번 retry)되었음 확인
         verify(restClient, times(2)).post();
         // fallback 메시지 전송
-        verify(stockWebSocketHandler).sendToAll(contains("일시적으로 제공할 수 없습니다"));
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), contains("일시적으로 제공할 수 없습니다"));
     }
 
     @Test
@@ -92,26 +94,25 @@ class AiBriefingServiceTest {
     void KR_종목은_Finnhub_대신_RAG_사용() {
         // given: POST 실패 (뉴스 호출 여부만 검증하기 위해 빠르게 종료)
         when(restClient.post()).thenThrow(new RuntimeException("fail"));
-        when(watchlistRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
+        when(newsArticleRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
         when(newsRetrievalService.findRelevant(eq("005930"), anyString(), eq(3))).thenReturn(List.of());
 
         // when: 국내 종목 코드 (숫자)
         aiBriefingService.generateAsync("005930", 5.1, "UP");
 
-        // then: Finnhub 뉴스 조회용 GET은 호출되지 않고, RAG 검색이 대신 호출됨
-        verify(restClient, never()).get();
+        // then: Finnhub 뉴스 클라이언트는 호출되지 않고, RAG 검색이 대신 호출됨
+        verifyNoInteractions(finnhubNewsClient);
         verify(newsRetrievalService).findRelevant(eq("005930"), anyString(), eq(3));
     }
 
     @Test
-    @DisplayName("KR 종목 급등 시 관심종목에 등록된 회사명으로 RAG 검색 쿼리를 구성한다")
+    @DisplayName("KR 종목 급등 시 뉴스 코퍼스에 저장된 회사명으로 RAG 검색 쿼리를 구성한다")
     void KR_종목_회사명_기반_RAG_쿼리_구성() {
         // given: Claude 호출 자체는 이 테스트의 관심사가 아니므로 실패시켜 빠르게 종료
         when(restClient.post()).thenThrow(new RuntimeException("fail"));
-        when(watchlistRepository.findFirstBySymbol("005930"))
-                .thenReturn(Optional.of(Watchlist.of("user1", "005930", "KR", "삼성전자")));
         NewsArticle article = NewsArticle.of("005930", "삼성전자", "삼성전자 실적 서프라이즈",
-                "설명", "https://example.com", LocalDateTime.now());
+                "설명", "https://example.com", LocalDateTime.now(), null);
+        when(newsArticleRepository.findFirstBySymbol("005930")).thenReturn(Optional.of(article));
         when(newsRetrievalService.findRelevant("005930", "삼성전자 주가 급등 이유", 3))
                 .thenReturn(List.of(article));
 
@@ -123,10 +124,10 @@ class AiBriefingServiceTest {
     }
 
     @Test
-    @DisplayName("관심종목에 없는 KR 심볼은 회사명 대신 심볼 코드로 RAG 쿼리를 구성한다")
-    void 관심종목에_없는_KR_심볼은_심볼코드로_쿼리_구성() {
+    @DisplayName("뉴스 코퍼스가 없는 KR 심볼은 회사명 대신 심볼 코드로 RAG 쿼리를 구성한다")
+    void 뉴스_코퍼스_없는_KR_심볼은_심볼코드로_쿼리_구성() {
         when(restClient.post()).thenThrow(new RuntimeException("fail"));
-        when(watchlistRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
+        when(newsArticleRepository.findFirstBySymbol("005930")).thenReturn(Optional.empty());
         when(newsRetrievalService.findRelevant(eq("005930"), anyString(), eq(3))).thenReturn(List.of());
 
         aiBriefingService.generateAsync("005930", -6.0, "DOWN");
@@ -145,7 +146,7 @@ class AiBriefingServiceTest {
 
         // then: 메시지 포맷 검증
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(stockWebSocketHandler).sendToAll(captor.capture());
+        verify(stockWebSocketHandler).sendToWatchers(eq("005930"), captor.capture());
 
         String message = captor.getValue();
         assertThat(message).contains("\"type\":\"AI_BRIEFING\"");
