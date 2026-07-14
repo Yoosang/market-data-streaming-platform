@@ -16,7 +16,7 @@ import javax.sql.DataSource;
 // DataSourceProperties.initializeDataSourceBuilder()를 거쳐야 Hikari의 jdbcUrl 등으로 올바르게
 // 매핑된다 — @ConfigurationProperties를 DataSource 빈에 직접 바인딩하면 프로퍼티명이 어긋난다.
 @Configuration
-public class VectorDbConfig {
+public class DataSourceConfig {
 
     @Bean
     @ConfigurationProperties("spring.datasource")
