@@ -106,19 +106,17 @@
 
 
 ### STOMP 프로토콜 도입
-- 현재: Raw WebSocket으로 단방향 브로드캐스트. 서버가 모든 종목 시세를 모든 클라이언트에 전송, 프론트에서 client-side 필터링.
-- 개선 시: STOMP의 topic 기반 구독(`/topic/price/AAPL`)으로 클라이언트별 관심종목만 서버에서 선별 전송. 사용자가 많아질수록 불필요한 트래픽 감소.
+- 현재: Ver7에서 백엔드 필터링 도입(`StockWebSocketHandler.sendToWatchers`) — 하지만 브로드캐스트마다 DB에서 관심종목 소유자를 조회하고 전체 WebSocket 세션을 순회하며 매칭하는 방식이라, 틱마다 O(세션 수) 스캔 + DB 쿼리가 반복됨
+- 개선 시: STOMP의 topic 기반 구독(`/topic/price/AAPL`)으로 전환하면 브로커가 구독 정보를 미리 들고 있어 발행 시점에 매번 조회/스캔할 필요가 없음. 사용자·세션이 많아질수록 효과 커짐
 - Spring: `@EnableWebSocketMessageBroker` + `SimpMessagingTemplate` / 프론트: `@stomp/stompjs` 라이브러리
-- 미룬 이유: 현재 사용자 수에서는 client-side 필터링으로 충분. STOMP는 Ver4(확장성) 단계에서 Kafka, Redis와 함께 검토.
+- 미룬 이유: 현재 사용자·세션 수에서는 매 틱 DB 쿼리+세션 스캔 비용이 무의미. STOMP는 Ver4(확장성) 단계에서 Kafka, Redis와 함께 검토.
 
-### Ver2에서 결정한 최적화 Backlog
+### 비동기 브로드캐스트용 스레드 풀 도입
+- 현재: `@EnableAsync`만 설정돼 있고 커스텀 `TaskExecutor` 빈이 없어, 틱마다 호출되는 `StockBroadcastService.broadcast()`와 `AiBriefingService.generateAsync()`가 기본값인 `SimpleAsyncTaskExecutor`로 실행됨 — 호출마다 스레드를 새로 생성하고 상한이 없음
+- 개선 시: `ThreadPoolTaskExecutor` 빈을 정의해 스레드 수 상한과 큐잉을 둠
+- 미룬 이유: 지금 틱 볼륨에서는 체감 차이 없음. 사용자·구독 종목 수가 늘어 틱 빈도가 높아지면 스레드 폭증 위험이 커져서 그때 우선순위 높여야 함
 
-**1. 백엔드 필터링 (세션별 관심종목 필터링)**
-- 현재: 백엔드가 전체 구독 종목을 모든 클라이언트에 브로드캐스트, 프론트에서 관심종목만 필터링
-- 개선 시: WebSocket 세션마다 구독 종목을 서버에서 관리하고 해당 세션에만 전송
-- 미룬 이유: 사용자 수 × 종목 수가 적은 지금은 트래픽 차이 무의미. 세션-종목 매핑 + 재연결 복원 로직이 Ver2 핵심 학습(캔들 집계)에서 집중력 분산.
-
-**2. 일봉 집계**
-- 현재: 1분봉만 집계
-- 개선 시: 1분봉을 집계해 일봉도 생성, 차트에서 1분봉↔일봉 전환 버튼 제공
-- 미룬 이유: 1분봉 패턴을 완전히 이해한 뒤 같은 구조로 빠르게 추가 가능. 지금 넣으면 스케줄러 2개 + DB 복잡도 증가.
+### 프론트 시세 리렌더링 배칭
+- 현재: `useStockWebSocket`이 틱을 받을 때마다 `setPrices`로 새 객체를 만들어 즉시 리렌더링 — 틱 1개당 리렌더링 1번
+- 개선 시: 일정 간격(예: 200ms)으로 들어온 틱을 모아서 한 번에 반영하거나 `requestAnimationFrame` 기반으로 스로틀링
+- 미룬 이유: 관심종목 수가 적은 지금은 리렌더링 비용이 무시할 수준. 관심종목·틱 빈도가 늘어나면 체감되는 시점에 도입
