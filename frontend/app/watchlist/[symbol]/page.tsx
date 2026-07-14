@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { useStockWebSocket, AiBriefingMessage } from "@/hooks/useStockWebSocket";
-import { authHeaders, isLoggedIn } from "@/lib/auth";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { authHeaders } from "@/lib/auth";
 import CandleChart from "@/components/CandleChart";
 
 const API_BASE = "http://localhost:8080";
@@ -18,7 +19,7 @@ interface NewsItem {
 }
 
 export default function WatchlistDetailPage() {
-  const router = useRouter();
+  const authed = useAuthGuard();
   const params = useParams<{ symbol: string }>();
   const symbol = params.symbol;
   const { watchlist } = useWatchlist();
@@ -28,11 +29,6 @@ export default function WatchlistDetailPage() {
   const [briefing, setBriefing] = useState<string | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingError, setBriefingError] = useState<string | null>(null);
-
-  // 미로그인 시 로그인 페이지로 이동
-  useEffect(() => {
-    if (!isLoggedIn()) router.push("/login");
-  }, [router]);
 
   const item = watchlist.find((w) => w.symbol === symbol);
   const displayName = item?.market === "KR" && item?.name ? item.name : symbol;
@@ -76,6 +72,8 @@ export default function WatchlistDetailPage() {
       setBriefingError("실시간 시세가 없어 분석할 수 없습니다");
     }
   };
+
+  if (!authed) return null;
 
   return (
     <main className="min-h-screen bg-surface-black text-body-on-dark flex flex-col items-center py-8 px-4">

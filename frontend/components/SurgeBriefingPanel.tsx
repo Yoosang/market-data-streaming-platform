@@ -9,6 +9,7 @@ interface SurgeEvent {
   briefing?: string;
   loading: boolean;
   market: "US" | "KR";
+  displayName: string;
 }
 
 interface Props {
@@ -21,7 +22,7 @@ export default function SurgeBriefingPanel({ surgeEvents }: Props) {
 
   return (
     <div className="w-full max-w-sm space-y-2 mb-4">
-      {entries.map(({ surge, briefing, loading, market }) => {
+      {entries.map(({ surge, briefing, loading, market, displayName }) => {
         const isUp = surge.direction === "UP";
         const sign = isUp ? "+" : "";
         const borderColor = isUp ? "border-red-500" : "border-blue-500";
@@ -38,7 +39,7 @@ export default function SurgeBriefingPanel({ surgeEvents }: Props) {
             {/* 급등/급락 헤더 */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-body-on-dark">{surge.symbol}</span>
+                <span className="text-sm font-bold text-body-on-dark">{displayName}</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-pill ${badgeColor}`}>
                   {arrow} {sign}{surge.changePercent.toFixed(2)}%
                 </span>

@@ -1,22 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { useWatchlist, Market } from "@/hooks/useWatchlist";
-import { isLoggedIn } from "@/lib/auth";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import KrStockSearchInput from "@/components/KrStockSearchInput";
 
 export default function WatchlistRegisterPage() {
-  const router = useRouter();
+  const authed = useAuthGuard();
   const { watchlist, addSymbol, removeSymbol } = useWatchlist();
   const [input, setInput] = useState("");
   const [market, setMarket] = useState<Market>("US");
-
-  // 미로그인 시 로그인 페이지로 이동
-  useEffect(() => {
-    if (!isLoggedIn()) router.push("/login");
-  }, [router]);
 
   const handleAdd = () => {
     const trimmed = input.trim();
@@ -33,6 +27,8 @@ export default function WatchlistRegisterPage() {
     setMarket(m);
     setInput("");
   };
+
+  if (!authed) return null;
 
   return (
     <main className="min-h-screen bg-surface-black text-body-on-dark flex flex-col items-center py-8 px-4">

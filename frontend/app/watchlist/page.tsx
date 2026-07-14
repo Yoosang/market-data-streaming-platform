@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { useStockWebSocket, SurgeMessage, AiBriefingMessage } from "@/hooks/useStockWebSocket";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { formatPrice } from "@/lib/format";
-import { isLoggedIn, removeToken } from "@/lib/auth";
+import { removeToken } from "@/lib/auth";
 import SurgeBriefingPanel from "@/components/SurgeBriefingPanel";
 import AlertForm from "@/components/AlertForm";
 
 export default function WatchlistPage() {
   const router = useRouter();
+  const authed = useAuthGuard();
   const { watchlist } = useWatchlist();
   const [alertSymbol, setAlertSymbol] = useState<string | null>(null);
 
@@ -21,20 +23,17 @@ export default function WatchlistPage() {
     briefing?: string;
     loading: boolean;
     market: "US" | "KR";
+    displayName: string;
   }>>({});
-
-  // 미로그인 시 로그인 페이지로 이동
-  useEffect(() => {
-    if (!isLoggedIn()) router.push("/login");
-  }, [router]);
 
   // SURGE: 즉시 카드 표시 (loading=true), 30초 후 자동 제거
   const handleSurge = useCallback((surge: SurgeMessage) => {
     const item = watchlist.find((w) => w.symbol === surge.symbol);
     const m = (item?.market ?? "US") as "US" | "KR";
+    const displayName = m === "KR" && item?.name ? item.name : surge.symbol;
     setSurgeEvents((prev) => ({
       ...prev,
-      [surge.symbol]: { surge, loading: true, market: m },
+      [surge.symbol]: { surge, loading: true, market: m, displayName },
     }));
     setTimeout(() => {
       setSurgeEvents((prev) => {
@@ -54,6 +53,8 @@ export default function WatchlistPage() {
   }, []);
 
   const prices = useStockWebSocket(handleSurge, handleAiBriefing);
+
+  if (!authed) return null;
 
   return (
     <main className="min-h-screen bg-surface-black text-body-on-dark flex flex-col items-center py-8 px-4">
