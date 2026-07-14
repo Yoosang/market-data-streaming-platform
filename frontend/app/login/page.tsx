@@ -13,6 +13,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  const handleTab = (tab: "login" | "signup") => {
+    setTab(tab); setError("");
+    setUsername("");
+    setPassword("");
+  }
+
   const handleSubmit = async () => {
     if (!username.trim() || !password.trim()) return;
     setError("");
@@ -47,7 +53,7 @@ export default function LoginPage() {
           {(["login", "signup"] as const).map((t) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setError(""); }}
+              onClick={() => { handleTab(t) }}
               className={`flex-1 py-2 text-sm font-semibold rounded-pill transition-colors ${
                 tab === t ? "bg-primary text-body-on-dark" : "text-body-muted hover:text-body-on-dark"
               }`}
