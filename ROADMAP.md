@@ -53,7 +53,8 @@
 ## Ver7 — 페이지 리팩토링 + 세션 보안 + RAG 벡터 DB화 ✅
 - **배경**: 애초 "프로덕션 하드닝"(Dockerfile, prod 설정, AWS 배포)으로 계획했으나, 착수 전
   코드베이스를 감사하다 보니 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다 뭉쳐있어 UX/코드
-  구조 정리가 더 급하다고 판단해 범위를 바꿈. 프로덕션 하드닝/배포는 Ver8로 이동.
+  구조 정리가 더 급하다고 판단해 범위를 바꿈. 프로덕션 하드닝/배포는 Ver9로 이동(원래 Ver8 예정이었으나
+  Ver8에서 AI Agent + MCP를 먼저 진행하며 한 번 더 미룸).
 
 - **즉시 버그 수정** ✅ (Ver7 착수 전 먼저 처리한 버그 3건)
   - IDOR: `PriceAlertController.deleteAlert`에 소유권 체크가 없어 누구나 남의 알림을 삭제 가능하던 문제
@@ -100,7 +101,7 @@
     새고 있었음 — 위 ALERT 유출 버그와 동일한 구조)
   - 미사용 코드 정리 (프론트 export/prop, 백엔드 dead code 스윕)
 
-- **Ver8으로 이동한 범위** (예정) — 애초 Ver7로 계획했던 프로덕션 하드닝/배포
+- **Ver9로 이동한 범위** (예정) — 애초 Ver7로 계획했던 프로덕션 하드닝/배포, Ver8에서 한 번 더 미룸
   - 배포 최소요건: Dockerfile, 프론트 API/WS URL 환경변수화, `application-prod.yaml` 분리,
     Flyway 도입, Actuator 헬스체크 인증 예외, `RestClient` 타임아웃, `@Async` 전용 스레드풀,
     `spring-boot-starter-validation` 활성화
@@ -111,10 +112,39 @@
 
 ---
 
+## Ver8 — AI PB 대화형 Agent + MCP 서버 (진행 중)
+
+- **배경**: 현재 AI브리핑(`AiBriefingService`)은 급등 감지 시 Claude에 프롬프트를 1회 호출하는
+  단발성 흐름이지, 여러 단계에 걸쳐 스스로 도구를 선택·호출하는 "Agent"는 아니다. RAG(뉴스 임베딩+
+  pgvector 유사도 검색)는 이미 있지만 MCP는 전혀 없다. 이 둘을 추가해 학습 범위를 넓히고, 이후
+  계획했던 프로덕션 하드닝/배포는 Ver9로 미룬다 (Ver7이 이미 한 번 범위를 바꾼 선례가 있음).
+
+### Feature 1: 대화형 AI PB Agent (Tool Use)
+로그인 사용자가 "내 관심종목 어때?" 같은 질문을 하면, Claude가 도구(관심종목 조회, 최근 뉴스 검색,
+캔들 통계)를 스스로 선택·호출하며 답을 구성하는 멀티턴 루프.
+- 신규: `infra/anthropic/AnthropicClient.java` (tools 포함 멀티턴 `/v1/messages` 호출, SDK 미사용 —
+  기존 `AiBriefingService`와 같은 `RestClient` 패턴), `application/agent/AgentToolService.java`
+  (`get_watchlist`/`get_recent_news`/`get_candle_stats`, 기존 서비스 재사용), `application/agent/AgentChatService.java`
+  (루프, `MAX_ITERATIONS=5`), `api/agent/AgentChatController.java` (`POST /api/agent/chat`)
+- 프론트: `app/agent/page.tsx`, `hooks/useAgentChat.ts` — 대화 이력은 DB 저장 없이 프론트가 들고 재전송
+- *(여유분)* `get_price_alerts` 도구
+
+### Feature 2: MCP 서버
+Feature 1과 동일한 도구셋을 MCP로 노출해 Claude Desktop 등 외부 MCP 클라이언트에서도 호출 가능하게 함.
+- 아키텍처: 독립 Node/TypeScript MCP 서버(`@modelcontextprotocol/sdk`)가 백엔드 REST API를 호출하는
+  방식 채택 — Spring AI MCP 통합은 Spring Boot 4.0.5와의 호환성 리스크로 배제
+- 신규: `api/agent/AgentToolsController.java` (`AgentToolService`를 감싸는 REST 엔드포인트, JWT 보호),
+  `mcp-server/` (`authClient.ts` — 로그인 후 JWT 캐시, `tools.ts`, `src/index.ts` — stdio transport)
+- 인증: 별도 토큰 시스템 없이 기존 로그인(JWT) 재사용, 401 시 재로그인
+
+자세한 단계별 계획은 `/Users/usang/.claude/plans/nested-conjuring-ember.md` 참고.
+
+---
+
 ## 미래 검토 (확장성): Kafka/Redis 필요성 분석
 
 **결론**: 지금(단일 인스턴스)은 필요 없음. 아래 문제는 전부 "여러 인스턴스가 동시에 떠 있는"
-시나리오에서만 발생한다. 실제 다중 인스턴스 배포 계획이 생기는 시점(Ver8 스케일링 단계)에 도입.
+시나리오에서만 발생한다. 실제 다중 인스턴스 배포 계획이 생기는 시점(Ver9 스케일링 단계)에 도입.
 
 ### 다중 인스턴스로 확장하면 실제로 깨지는 것들
 

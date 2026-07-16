@@ -7,13 +7,13 @@
 
 ---
 
-## 현재 버전: Ver7 ✅ (완료) — 다음 버전(Ver8) 계획 미정
+## 현재 버전: Ver8 진행 중 — AI PB 대화형 Agent + MCP 서버
 
-애초 "프로덕션 하드닝(배포)"으로 계획했으나, 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다
-뭉쳐있어 UX/코드 구조 정리가 더 급하다고 판단해 범위를 바꿔 진행했습니다. 페이지 분리, 텔레그램
-알림 전환, 세션 보안 강화, RAG의 pgvector 마이그레이션, 차트 버그 수정 등을 다뤘고, 애초 계획했던
-배포 준비는 Ver8로 넘어갔습니다. 자세한 진행 상황은 [ROADMAP.md](./ROADMAP.md)의 Ver7 항목을
-참고하세요.
+현재 AI브리핑은 급등 감지 시 Claude를 1회 호출하는 단발성 흐름이라, 여러 단계에 걸쳐 스스로 도구를
+선택·호출하는 "Agent"는 아직 없습니다. Ver8에서는 (1) 관심종목/뉴스/캔들 조회 도구를 Claude가
+스스로 호출해가며 답하는 대화형 Agent와 (2) 동일한 도구를 MCP로 노출해 Claude Desktop 같은 외부
+클라이언트에서도 쓸 수 있게 하는 MCP 서버를 추가합니다. 애초 Ver8로 계획했던 프로덕션 하드닝/배포는
+Ver9로 넘어갔습니다. 자세한 내용은 [ROADMAP.md](./ROADMAP.md)의 Ver8 항목을 참고하세요.
 
 ### 버전별 학습 목표 요약
 
@@ -26,6 +26,7 @@
 | Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
 | Ver6 | RAG (검색 증강 생성) | 뉴스 임베딩 + 벡터 유사도 검색으로 KR 브리핑 개선 |
 | Ver7 | 벡터 DB (pgvector), 세션 보안 | 페이지 리팩토링, 텔레그램 알림, RAG를 pgvector로 마이그레이션, JWT 세션 30분 |
+| Ver8 (진행 중) | AI Agent (Tool Use), MCP | 대화형 AI PB 챗봇 + 도구 3종, 동일 도구를 MCP 서버로 외부 노출 |
 
 ---
 
@@ -45,6 +46,8 @@
 | KR 뉴스 수집 | 네이버 뉴스 검색 API | Ver6 |
 | 임베딩 / RAG | OpenAI Embeddings (text-embedding-3-small) | Ver6 |
 | 벡터 DB | pgvector (Postgres) — RAG 뉴스 코퍼스 전용, 나머지는 MySQL 유지 | Ver7 |
+| AI Agent (Tool Use) | Claude API (claude-haiku, multi-turn tool_use 루프) | Ver8 |
+| MCP 서버 | Node.js + `@modelcontextprotocol/sdk` (stdio transport) | Ver8 |
 
 ---
 
@@ -257,6 +260,13 @@ NewsCollectionScheduler (@Scheduled)
   `sendToWatchers`로 필터링 (기존엔 전체 세션에 브로드캐스트해 다른 사용자 관심종목 정보가
   새고 있었음)
 - Kafka/Redis 필요성 분석 문서화 (구현 없이 [ROADMAP.md](./ROADMAP.md)에 근거 기반 분석만 정리)
+
+### Ver8 — AI PB 대화형 Agent + MCP 서버 (진행 중)
+- **Feature 1**: 로그인 사용자가 자연어로 질문하면 Claude가 관심종목/뉴스/캔들 통계 조회 도구를
+  스스로 선택·호출해가며 답을 구성하는 멀티턴 Agent (`POST /api/agent/chat`)
+- **Feature 2**: 동일 도구를 MCP로 노출하는 독립 Node.js 서버 (`mcp-server/`) — Claude Desktop 등
+  외부 MCP 클라이언트에서 백엔드 데이터를 직접 조회 가능
+- 진행 상황과 단계별 계획은 [ROADMAP.md](./ROADMAP.md)의 Ver8 항목 참고
 
 ---
 
