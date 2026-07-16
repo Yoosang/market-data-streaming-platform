@@ -60,6 +60,7 @@ public class AgentChatService {
 
             List<Map<String, Object>> toolResults = new ArrayList<>();
             for (ContentBlock.ToolUse toolUse : toolUses) {
+                log.info("Agent tool call (iteration {}): {} input={}", i + 1, toolUse.name(), toolUse.input());
                 toolCalls.add(toolUse.name());
                 Object result = executeTool(userId, toolUse);
                 toolResults.add(Map.of(
