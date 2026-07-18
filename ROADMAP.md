@@ -131,10 +131,11 @@
 
 ### Feature 2: MCP 서버
 Feature 1과 동일한 도구셋을 MCP로 노출해 Claude Desktop 등 외부 MCP 클라이언트에서도 호출 가능하게 함.
-- 아키텍처: 독립 Node/TypeScript MCP 서버(`@modelcontextprotocol/sdk`)가 백엔드 REST API를 호출하는
-  방식 채택 — Spring AI MCP 통합은 Spring Boot 4.0.5와의 호환성 리스크로 배제
+- 아키텍처: 독립 Python MCP 서버(`mcp` SDK)가 백엔드 REST API를 호출하는 방식 채택 — Spring AI
+  MCP 통합은 Spring Boot 4.0.5와의 호환성 리스크로 배제. Python은 안트로픽 공식 SDK가 있고
+  AI/에이전트 툴링 생태계의 주류 언어라 Node.js보다 이 프로젝트 목적에 더 적합하다고 판단
 - 신규: `api/agent/AgentToolsController.java` (`AgentToolService`를 감싸는 REST 엔드포인트, JWT 보호),
-  `mcp-server/` (`authClient.ts` — 로그인 후 JWT 캐시, `tools.ts`, `src/index.ts` — stdio transport)
+  `mcp-server/` (`auth_client.py` — 로그인 후 JWT 캐시, `tools.py`, `server.py` — stdio transport)
 - 인증: 별도 토큰 시스템 없이 기존 로그인(JWT) 재사용, 401 시 재로그인
 
 자세한 단계별 계획은 `/Users/usang/.claude/plans/nested-conjuring-ember.md` 참고.

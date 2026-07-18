@@ -47,7 +47,7 @@ Ver9로 넘어갔습니다. 자세한 내용은 [ROADMAP.md](./ROADMAP.md)의 Ve
 | 임베딩 / RAG | OpenAI Embeddings (text-embedding-3-small) | Ver6 |
 | 벡터 DB | pgvector (Postgres) — RAG 뉴스 코퍼스 전용, 나머지는 MySQL 유지 | Ver7 |
 | AI Agent (Tool Use) | Claude API (claude-haiku, multi-turn tool_use 루프) | Ver8 |
-| MCP 서버 | Node.js + `@modelcontextprotocol/sdk` (stdio transport) | Ver8 |
+| MCP 서버 | Python + `mcp` SDK (stdio transport) | Ver8 |
 
 ---
 
@@ -264,7 +264,7 @@ NewsCollectionScheduler (@Scheduled)
 ### Ver8 — AI PB 대화형 Agent + MCP 서버 (진행 중)
 - **Feature 1**: 로그인 사용자가 자연어로 질문하면 Claude가 관심종목/뉴스/캔들 통계 조회 도구를
   스스로 선택·호출해가며 답을 구성하는 멀티턴 Agent (`POST /api/agent/chat`)
-- **Feature 2**: 동일 도구를 MCP로 노출하는 독립 Node.js 서버 (`mcp-server/`) — Claude Desktop 등
+- **Feature 2**: 동일 도구를 MCP로 노출하는 독립 Python 서버 (`mcp-server/`) — Claude Desktop 등
   외부 MCP 클라이언트에서 백엔드 데이터를 직접 조회 가능
 - 진행 상황과 단계별 계획은 [ROADMAP.md](./ROADMAP.md)의 Ver8 항목 참고
 
