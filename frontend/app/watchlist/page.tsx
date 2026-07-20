@@ -63,12 +63,17 @@ export default function WatchlistPage() {
         <h1 className="text-[21px] font-semibold text-body-muted tracking-widest uppercase">
           Stock Market · Live
         </h1>
-        <button
-          onClick={() => { removeToken(); router.push("/login"); }}
-          className="text-xs text-ink-muted-48 hover:text-body-muted transition-colors"
-        >
-          로그아웃
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href="/agent" className="text-xs text-primary-on-dark hover:opacity-80 transition-opacity">
+            AI PB
+          </Link>
+          <button
+            onClick={() => { removeToken(); router.push("/login"); }}
+            className="text-xs text-ink-muted-48 hover:text-body-muted transition-colors"
+          >
+            로그아웃
+          </button>
+        </div>
       </div>
 
       {/* 급등/급락 AI 브리핑 패널 */}

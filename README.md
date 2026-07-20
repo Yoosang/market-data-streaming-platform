@@ -3,17 +3,17 @@
 미국·국내 주식 실시간 시세를 모바일 WTS 스타일로 보여주는 학습용 프로젝트입니다.
 
 > **학습 목적으로 단계별 기능을 추가하며 발전시킨 프로젝트입니다.**  
-> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 → Ver6 → Ver7 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
+> Ver1 → Ver2 → Ver3 → Ver4 → Ver5 → Ver6 → Ver7 → Ver8 순서로 기능을 확장하고, 각 버전은 git tag로 구분합니다.
 
 ---
 
-## 현재 버전: Ver7 ✅ (완료) — 다음 버전(Ver8) 계획 미정
+## 현재 버전: Ver8 ✅ (완료) — 다음 버전(Ver9) 계획 미정
 
-애초 "프로덕션 하드닝(배포)"으로 계획했으나, 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다
-뭉쳐있어 UX/코드 구조 정리가 더 급하다고 판단해 범위를 바꿔 진행했습니다. 페이지 분리, 텔레그램
-알림 전환, 세션 보안 강화, RAG의 pgvector 마이그레이션, 차트 버그 수정 등을 다뤘고, 애초 계획했던
-배포 준비는 Ver8로 넘어갔습니다. 자세한 진행 상황은 [ROADMAP.md](./ROADMAP.md)의 Ver7 항목을
-참고하세요.
+기존 AI브리핑은 급등 감지 시 Claude를 1회 호출하는 단발성 흐름이라, 여러 단계에 걸쳐 스스로 도구를
+선택·호출하는 "Agent"는 없었습니다. Ver8에서는 (1) 관심종목/뉴스/캔들 조회 도구를 Claude가 스스로
+호출해가며 답하는 대화형 Agent와 (2) 동일한 도구를 MCP로 노출하는 독립 Python 서버를 추가했습니다.
+애초 Ver8로 계획했던 프로덕션 하드닝/배포는 Ver9로 넘어갔습니다. 자세한 내용은
+[ROADMAP.md](./ROADMAP.md)의 Ver8 항목을 참고하세요.
 
 ### 버전별 학습 목표 요약
 
@@ -26,6 +26,7 @@
 | Ver5 | LLM API 연동 | 급등/급락 감지 + Claude AI 브리핑 |
 | Ver6 | RAG (검색 증강 생성) | 뉴스 임베딩 + 벡터 유사도 검색으로 KR 브리핑 개선 |
 | Ver7 | 벡터 DB (pgvector), 세션 보안 | 페이지 리팩토링, 텔레그램 알림, RAG를 pgvector로 마이그레이션, JWT 세션 30분 |
+| Ver8 | AI Agent (Tool Use), MCP | 대화형 AI PB 챗봇 + 도구 3종, 동일 도구를 MCP 서버로 외부 노출 |
 
 ---
 
@@ -45,6 +46,8 @@
 | KR 뉴스 수집 | 네이버 뉴스 검색 API | Ver6 |
 | 임베딩 / RAG | OpenAI Embeddings (text-embedding-3-small) | Ver6 |
 | 벡터 DB | pgvector (Postgres) — RAG 뉴스 코퍼스 전용, 나머지는 MySQL 유지 | Ver7 |
+| AI Agent (Tool Use) | Claude API (claude-haiku, multi-turn tool_use 루프) | Ver8 |
+| MCP 서버 | Python + `mcp` SDK (stdio transport) | Ver8 |
 
 ---
 
@@ -54,6 +57,7 @@
 
 - Java 17
 - Node.js 18+
+- Python 3.10+ (MCP 서버, 선택)
 - MySQL 8.x
 - Finnhub API 키 ([무료 가입](https://finnhub.io/))
 - 한국투자증권 API 키 (KR 종목 시세, 선택)
@@ -86,6 +90,43 @@ npm run dev
 ```
 
 브라우저에서 `http://localhost:3000` 접속 → 회원가입 → 로그인
+
+### 4. MCP 서버 (선택)
+
+백엔드에 회원가입한 계정 하나를 "MCP용 데모 계정"으로 정해두고 진행합니다.
+
+```bash
+cd mcp-server
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# .env에 BACKEND_URL, MCP_USERNAME, MCP_PASSWORD 입력
+
+python auth_client.py   # 로그인 확인용 — "로그인 성공. JWT: ..." 출력되면 정상
+```
+
+Claude Desktop에 연결하려면 `claude_desktop_config.json`(macOS: `~/Library/Application Support/Claude/`)에
+아래 항목을 추가하고 앱을 재시작합니다.
+
+```json
+{
+  "mcpServers": {
+    "marketdata": {
+      "command": "/절대경로/mcp-server/.venv/bin/python",
+      "args": ["server.py"],
+      "cwd": "/절대경로/mcp-server"
+    }
+  }
+}
+```
+
+Claude Desktop 없이 도구만 검증하려면 [MCP Inspector](https://github.com/modelcontextprotocol/inspector)를 씁니다.
+
+```bash
+npx @modelcontextprotocol/inspector --cli .venv/bin/python server.py --method tools/list
+```
 
 ---
 
@@ -136,15 +177,19 @@ marketdata/
 │   ├── src/main/java/com/usang/marketdata/
 │   │   ├── global/config/        # WebSocket, Security 설정
 │   │   ├── domain/               # 엔티티 (User, Watchlist, PriceAlert, Candle, NewsArticle)
-│   │   ├── application/          # 비즈니스 로직 (캔들 집계, 알림 체커, 브로드캐스트, 뉴스 수집/검색)
-│   │   ├── infra/                # 외부 연동 (Finnhub, KIS WebSocket, JWT, 네이버 뉴스, OpenAI 임베딩)
+│   │   ├── application/          # 비즈니스 로직 (캔들 집계, 알림 체커, 브로드캐스트, 뉴스 수집/검색, AI Agent)
+│   │   ├── infra/                # 외부 연동 (Finnhub, KIS WebSocket, JWT, 네이버 뉴스, OpenAI 임베딩, Claude tool-use)
 │   │   └── api/                  # REST Controller, WebSocket Handler
 │   └── build.gradle
 ├── frontend/
-│   ├── app/                      # Next.js 페이지 (로그인, /watchlist 목록·등록·상세)
+│   ├── app/                      # Next.js 페이지 (로그인, /watchlist 목록·등록·상세, /agent 채팅)
 │   ├── components/               # CandleChart, AlertForm, KrStockSearchInput, SurgeBriefingPanel
-│   ├── hooks/                    # useStockWebSocket, useWatchlist, useAlerts, useAuthGuard
+│   ├── hooks/                    # useStockWebSocket, useWatchlist, useAlerts, useAuthGuard, useAgentChat
 │   └── lib/                      # auth (JWT), format
+├── mcp-server/                   # 독립 Python MCP 서버 (agent 도구를 Claude Desktop 등 외부에 노출)
+│   ├── auth_client.py            # 로그인 + JWT 캐시
+│   ├── tools.py                  # MCP 도구 3종 정의
+│   └── server.py                 # stdio transport 진입점
 └── docker-compose.yml
 ```
 
@@ -188,6 +233,13 @@ NewsCollectionScheduler (@Scheduled)
   검증해 세션에 userId 부여(토큰 없어도 연결은 허용, 단 아무 메시지도 받지 못함).
   `StockWebSocketHandler.sendToWatchers`가 시세/SURGE/AI_BRIEFING 모두 해당 종목을 관심종목에
   등록한 사용자에게만 전송 (가격 알림은 Ver7에서 텔레그램 전용으로 바뀌어 WS를 타지 않음)
+- AI Agent(Ver8): `POST /api/agent/chat` → `AgentChatService`가 Claude에 도구 3종
+  (`get_watchlist`/`get_recent_news`/`get_candle_stats`)을 알려주고, Claude가 스스로 호출을
+  요청하면(`tool_use`) `AgentToolService`를 실행해 결과를 다시 넣어주는 멀티턴 루프
+  (`MAX_ITERATIONS=5`). 대화 이력은 DB에 저장하지 않고 프론트가 들고 재전송
+- MCP 서버(Ver8): 독립 Python 프로세스(`mcp-server/`)가 `AgentToolService`와 동일한 도구를
+  `AgentToolsController`(REST) 경유로 노출 — Claude Desktop 등 외부 MCP 클라이언트가 백엔드
+  데이터를 직접 조회 가능. 내부 Agent 루프는 REST를 거치지 않고 `AgentToolService`를 직접 호출
 
 ---
 
@@ -257,6 +309,57 @@ NewsCollectionScheduler (@Scheduled)
   `sendToWatchers`로 필터링 (기존엔 전체 세션에 브로드캐스트해 다른 사용자 관심종목 정보가
   새고 있었음)
 - Kafka/Redis 필요성 분석 문서화 (구현 없이 [ROADMAP.md](./ROADMAP.md)에 근거 기반 분석만 정리)
+
+### Ver8 — AI PB 대화형 Agent + MCP 서버
+
+지원 중인 회사의 "AI Agent 및 업무 자동화 시스템 구축" 요구에 맞춰, 기존 AI브리핑(단발성 LLM 호출)과
+구분되는 진짜 tool-use 기반 Agent와 MCP를 추가했다.
+
+**Feature 1 — 대화형 AI PB Agent**
+- `infra/anthropic/AnthropicClient.java` 신설 — `tools[]` 포함 멀티턴 `/v1/messages` 호출 (SDK
+  미사용, 기존 `AiBriefingService`와 같은 `RestClient` 패턴). 기존 단발성 브리핑 흐름은 그대로 둠
+- `AgentToolService`에 도구 3종: `get_watchlist`(관심종목+현재가+전일종가+등락률),
+  `get_recent_news`(US: Finnhub 헤드라인 / KR: RAG 유사도 검색), `get_candle_stats`(캔들 요약)
+  — 전부 기존 서비스(`WatchlistService`, `NewsRetrievalService`, `SurgeDetector`, `LatestPriceStore`,
+  `CandleRepository`) 재사용
+- `AgentChatService`가 tool_use ↔ tool_result 왕복 루프를 돌며 `MAX_ITERATIONS=5`로 상한선 설정,
+  초과 시 fallback 메시지. `userId`는 도구의 JSON 스키마에 포함하지 않아 Claude가 다른 사용자
+  데이터를 요청할 구조적 방법이 없음
+- 프론트 `/agent` 페이지: 대화형 채팅 UI, 어떤 도구가 호출됐는지 보여주는 칩(`🔧 get_watchlist`),
+  `react-markdown`+`remark-gfm`으로 답변의 표/볼드 렌더링. 대화 이력은 DB 저장 없이 프론트가 들고
+  재전송(stateless)
+- 실제 curl 검증에서 "AAPL 지금 사도 될까?" 같은 질문에 `get_candle_stats`+`get_recent_news`를
+  Claude가 스스로 함께 호출하는 멀티스텝 동작 확인
+
+**Feature 2 — MCP 서버**
+- `AgentToolsController` 신설 — Feature 1의 `AgentToolService`를 감싸는 REST 엔드포인트
+  (`GET /api/agent-tools/watchlist`, `/news/{symbol}`, `/candle-stats/{symbol}`). 내부 Agent
+  루프는 이 컨트롤러를 거치지 않고 같은 JVM 안에서 `AgentToolService`를 직접 호출, 외부 MCP
+  서버만 HTTP로 호출 — 로직은 하나, 호출자만 둘
+- 독립 Python 프로젝트 `mcp-server/` — 안트로픽 공식 `mcp` SDK(`FastMCP`)로 동일 도구 3종을
+  MCP tool로 재정의, 내부적으로 `AgentToolsController`를 JWT 인증해 호출. Node.js 대신 Python을
+  선택한 이유는 안트로픽 공식 Python SDK가 TypeScript SDK와 동급이고, 실제 AI/에이전트 툴링
+  생태계가 Python 위주라서
+- `auth_client.py`가 데모 계정으로 로그인해 JWT를 메모리에 캐시, 401 시 재로그인
+- Claude Desktop이 설치되지 않은 환경이라 실제 연동은 생략하고, 공식
+  [MCP Inspector](https://github.com/modelcontextprotocol/inspector) CLI로 도구 목록/호출을
+  검증 — Claude Desktop 연결 방법은 위 "실행 방법" 섹션에 문서화해둠
+- *(스코프 아웃)* `get_price_alerts` 도구는 여유분으로 남겨두고 미구현 — 이미 확보한 도구 3종만으로
+  멀티스텝 tool-use와 MCP 연동 모두 충분히 증명됨
+
+**사용 예시**
+```
+사용자: 내 관심종목 알려줘
+🔧 get_watchlist
+AI: 현재 등록된 관심종목은 1개입니다: AAPL(Apple), 전일종가 $314.86 ...
+
+사용자: AAPL 지금 사도 될까?
+🔧 get_candle_stats  🔧 get_recent_news
+AI: 최근 AI 관련 호재(Apple Intelligence 중국 진출 승인)로 상승 모멘텀이 있으나,
+    투자 기간과 리스크 성향을 고려해 판단하시길 권장합니다 ...
+```
+
+자세한 단계별 진행 내역은 [ROADMAP.md](./ROADMAP.md)의 Ver8 항목 참고.
 
 ---
 

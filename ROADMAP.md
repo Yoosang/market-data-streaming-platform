@@ -53,7 +53,8 @@
 ## Ver7 — 페이지 리팩토링 + 세션 보안 + RAG 벡터 DB화 ✅
 - **배경**: 애초 "프로덕션 하드닝"(Dockerfile, prod 설정, AWS 배포)으로 계획했으나, 착수 전
   코드베이스를 감사하다 보니 관심종목 화면 하나에 목록·차트·알림·AI브리핑이 다 뭉쳐있어 UX/코드
-  구조 정리가 더 급하다고 판단해 범위를 바꿈. 프로덕션 하드닝/배포는 Ver8로 이동.
+  구조 정리가 더 급하다고 판단해 범위를 바꿈. 프로덕션 하드닝/배포는 Ver9로 이동(원래 Ver8 예정이었으나
+  Ver8에서 AI Agent + MCP를 먼저 진행하며 한 번 더 미룸).
 
 - **즉시 버그 수정** ✅ (Ver7 착수 전 먼저 처리한 버그 3건)
   - IDOR: `PriceAlertController.deleteAlert`에 소유권 체크가 없어 누구나 남의 알림을 삭제 가능하던 문제
@@ -100,7 +101,7 @@
     새고 있었음 — 위 ALERT 유출 버그와 동일한 구조)
   - 미사용 코드 정리 (프론트 export/prop, 백엔드 dead code 스윕)
 
-- **Ver8으로 이동한 범위** (예정) — 애초 Ver7로 계획했던 프로덕션 하드닝/배포
+- **Ver9로 이동한 범위** (예정) — 애초 Ver7로 계획했던 프로덕션 하드닝/배포, Ver8에서 한 번 더 미룸
   - 배포 최소요건: Dockerfile, 프론트 API/WS URL 환경변수화, `application-prod.yaml` 분리,
     Flyway 도입, Actuator 헬스체크 인증 예외, `RestClient` 타임아웃, `@Async` 전용 스레드풀,
     `spring-boot-starter-validation` 활성화
@@ -111,10 +112,66 @@
 
 ---
 
+## Ver8 — AI PB 대화형 Agent + MCP 서버 ✅
+
+- **배경**: 기존 AI브리핑(`AiBriefingService`)은 급등 감지 시 Claude에 프롬프트를 1회 호출하는
+  단발성 흐름이지, 여러 단계에 걸쳐 스스로 도구를 선택·호출하는 "Agent"는 아니었다. RAG(뉴스 임베딩+
+  pgvector 유사도 검색)는 이미 있지만 MCP는 전혀 없었다. 이 둘을 추가해 학습 범위를 넓혔고, 이후
+  계획했던 프로덕션 하드닝/배포는 Ver9로 미뤘다 (Ver7이 이미 한 번 범위를 바꾼 선례가 있음).
+
+### Feature 1: 대화형 AI PB Agent (Tool Use) ✅
+로그인 사용자가 "내 관심종목 어때?" 같은 질문을 하면, Claude가 도구(관심종목 조회, 최근 뉴스 검색,
+캔들 통계)를 스스로 선택·호출하며 답을 구성하는 멀티턴 루프.
+- **Step1~3** ✅: `infra/anthropic/AnthropicClient.java` (tools 포함 멀티턴 `/v1/messages` 호출,
+  SDK 미사용 — 기존 `AiBriefingService`와 같은 `RestClient` 패턴), `AgentToolService.getWatchlist`,
+  `AgentChatService`(루프, `MAX_ITERATIONS=5`) + `AgentChatController`(`POST /api/agent/chat`)
+- **Step4~5** ✅: `get_recent_news`(US: Finnhub 헤드라인 / KR: RAG 유사도 검색), `get_candle_stats`
+  (캔들 요약) 도구 추가 — 전부 기존 서비스(`NewsRetrievalService`, `SurgeDetector`,
+  `LatestPriceStore`, `CandleRepository`) 재사용, 새 로직 없음
+- **Step6** ✅: "AAPL 지금 사도 될까?" 질문에 Claude가 `get_candle_stats`+`get_recent_news`를 같은
+  턴에 함께 호출하는 멀티스텝 동작 실증. `MAX_ITERATIONS=1`로 낮춰 반복 상한 fallback 경로도 확인
+  후 5로 복원, 도구 호출 로그(`AgentChatService`) 추가
+- **Step7 (여유분)** — 미구현: `get_price_alerts`. 이미 확보한 도구 3종으로 멀티스텝 tool-use 증명은
+  충분해 시간 대비 임팩트가 낮다고 판단해 스코프 아웃
+- **Step8** ✅: 프론트 `/agent` 페이지 — 대화형 채팅 UI, 호출된 도구를 보여주는 칩(`🔧 get_watchlist`),
+  `react-markdown`+`remark-gfm`으로 답변 렌더링. 대화 이력은 DB 저장 없이 프론트가 들고 재전송
+- 도구 실행 시 `userId`는 메서드 파라미터로만 전달하고 도구의 JSON 스키마에는 포함하지 않음 —
+  Claude가 다른 사용자의 데이터를 요청할 구조적 방법 자체를 차단
+
+### Feature 2: MCP 서버 ✅
+Feature 1과 동일한 도구셋을 MCP로 노출해 Claude Desktop 등 외부 MCP 클라이언트에서도 호출 가능하게 함.
+- **아키텍처**: 독립 Python MCP 서버(안트로픽 공식 `mcp` SDK, `FastMCP`)가 백엔드 REST API를
+  호출하는 방식 채택 — Spring AI MCP 통합은 Spring Boot 4.0.5와의 호환성 리스크로 배제. 최초
+  계획은 Node.js였으나, Python 공식 SDK가 TypeScript SDK와 동급이고 실제 AI/에이전트 툴링
+  생태계가 Python 위주라 이 프로젝트 목적에 더 적합하다고 판단해 착수 직전 변경
+- **Step9** ✅: `api/agent/AgentToolsController.java` — `AgentToolService`를 감싸는 REST 엔드포인트
+  (`GET /api/agent-tools/watchlist`, `/news/{symbol}`, `/candle-stats/{symbol}`). 내부 Agent
+  루프는 이 컨트롤러를 거치지 않고 같은 JVM 안에서 `AgentToolService`를 직접 호출, 외부 MCP
+  서버만 HTTP로 호출 — 로직은 하나, 호출자만 둘
+- **Step10** ✅: `mcp-server/` 스캐폴딩 — `auth_client.py`(데모 계정으로 로그인, JWT 메모리 캐시,
+  401 시 재로그인). 별도 토큰 발급 시스템 없이 기존 로그인(JWT) 그대로 재사용
+- **Step11** ✅: `tools.py`에 도구 3종을 `@mcp.tool()`로 정의(함수 시그니처+docstring에서 JSON
+  Schema 자동 생성), `server.py`가 stdio transport로 기동. `mcp` SDK의 `ClientSession`으로 직접
+  작성한 스크립트로 도구 목록/호출을 1차 검증
+- **Step12**: Claude Desktop이 개발 환경에 설치되어 있지 않아 실제 연동은 생략. 대신 공식
+  [MCP Inspector](https://github.com/modelcontextprotocol/inspector) CLI(`npx
+  @modelcontextprotocol/inspector --cli`)로 도구 목록/호출을 2차 검증(안트로픽 공식 도구 기준
+  검증이라는 의미가 있음). Claude Desktop 연결 방법은 README.md "실행 방법"에 문서화해둠 —
+  나중에 앱을 설치하면 바로 연결 가능
+- **Step13** ✅: README.md에 Ver8 변경 이력, 사용 예시, MCP 서버 실행/Claude Desktop 연동 방법 문서화
+
+### 배운 점 / 메모
+- FastMCP(Python SDK)는 함수 시그니처와 docstring만으로 도구의 JSON Schema를 자동 생성해준다 —
+  백엔드 Java 쪽에서 `AgentChatService.buildToolDefinitions()`로 손수 `Map`을 만든 것과 대비됨
+- 같은 도구 로직(`AgentToolService`)을 두 가지 호출 경로(내부 직접 호출 / 외부 REST)로 노출하는
+  구조가 "하나의 도구 정의, 여러 클라이언트"라는 MCP의 취지를 코드 레벨에서도 잘 보여줌
+
+---
+
 ## 미래 검토 (확장성): Kafka/Redis 필요성 분석
 
 **결론**: 지금(단일 인스턴스)은 필요 없음. 아래 문제는 전부 "여러 인스턴스가 동시에 떠 있는"
-시나리오에서만 발생한다. 실제 다중 인스턴스 배포 계획이 생기는 시점(Ver8 스케일링 단계)에 도입.
+시나리오에서만 발생한다. 실제 다중 인스턴스 배포 계획이 생기는 시점(Ver9 스케일링 단계)에 도입.
 
 ### 다중 인스턴스로 확장하면 실제로 깨지는 것들
 

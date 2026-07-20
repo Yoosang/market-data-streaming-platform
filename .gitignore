@@ -48,6 +48,11 @@ frontend/out/
 frontend/.env.local
 frontend/.env*.local
 
+### MCP server (Python) ###
+mcp-server/.venv/
+mcp-server/__pycache__/
+mcp-server/**/__pycache__/
+
 CLAUDE.md
 INTERVIEW.md
 PROJECT.md
